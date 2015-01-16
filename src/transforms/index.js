@@ -1,6 +1,7 @@
 define(function(require, exports, module) {
   return {
     aggregate:  require('./aggregate'),
+    copy:       require('./copy'),
     facet:      require('./facet'),
     filter:     require('./filter'),
     fold:       require('./fold'),

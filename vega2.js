@@ -8218,6 +8218,53 @@ define('transforms/aggregate',['require','exports','module','../core/tuple','../
     return node;
   };
 });
+define('transforms/copy',['require','exports','module','../util/index'],function(require, exports, module) {
+  var util = require('../util/index');
+
+  return function filter(model) {
+
+    var as = [], fields = [], from;
+
+    var node = new model.Node(function(input) {
+      util.debug(input, ["copying"]);
+
+      input.add.forEach(function(x) {
+        fields.forEach(function(f, i) {
+          //promote the field f of x[from] to field as[i] of x
+          x[as[i]] = (x[from] || {})[f];
+        });
+      });
+
+      input.mod.forEach(function(x) {
+        fields.forEach(function(f, i) {
+          //promote the field f of x[from] to field as[i] of x
+          x[as[i]] = (x[from] || {})[f];
+        });
+      });
+
+      return input;
+    });
+
+    node.from = function(field) {
+      from = field;
+      return node;
+    };
+
+    node.fields = function(fs) {
+      fields = fs;
+      if(!as.length) as = fs;
+      return node;
+    };
+
+    node.as = function(fs) {
+      as = fs;
+      return node;
+    };
+
+    return node;
+  };
+});
+
 define('transforms/facet',['require','exports','module','../util/index','../core/tuple','../core/changeset'],function(require, exports, module) {
   var util = require('../util/index'), 
       tuple = require('../core/tuple'), 
@@ -8633,9 +8680,10 @@ define('transforms/zip',['require','exports','module','../util/index','../core/c
     return node;
   };
 });
-define('transforms/index',['require','exports','module','./aggregate','./facet','./filter','./fold','./formula','./sort','./zip'],function(require, exports, module) {
+define('transforms/index',['require','exports','module','./aggregate','./copy','./facet','./filter','./fold','./formula','./sort','./zip'],function(require, exports, module) {
   return {
     aggregate:  require('./aggregate'),
+    copy:       require('./copy'),
     facet:      require('./facet'),
     filter:     require('./filter'),
     fold:       require('./fold'),
@@ -8644,6 +8692,7 @@ define('transforms/index',['require','exports','module','./aggregate','./facet',
     zip:        require('./zip')
   };
 });
+
 define('parse/transforms',['require','exports','module','../util/index','../transforms/index'],function(require, exports, module) {
   var util = require('../util/index'),
       transforms = require('../transforms/index');
