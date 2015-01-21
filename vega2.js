@@ -4210,6 +4210,65 @@ define('transforms/aggregate',['require','exports','module','../core/tuple','../
     return node;
   };
 });
+define('transforms/copy',['require','exports','module','../util/index'],function(require, exports, module) {
+  var util = require('../util/index');
+
+  return function filter(model) {
+
+    var as = [], // the names of the fields
+        fields = [], // the field accessors
+        from, // the from field accessor
+        from_base; // the first element of the from field (foo in foo.bar)
+
+    var node = new model.Node(function(input) {
+      var i, len, x, j, len2;
+      util.debug(input, ["copying"]);
+
+      for(i = 0, len = input.add.length; i < len; i++) {
+        x = input.add[i];
+        for(j = 0, len2 = fields.length; j < len2; j++) {
+          // promote the field fields[j] of x[from] to field as[j] of x;
+          x[as[j]] = fields[j](from(x) || {})
+        }
+      }
+
+      if(input.fields[from_base]) {
+        for(i = 0, len = input.mod.length; i < len; i++) {
+          x = input.mod[i];
+          for(j = 0, len2 = fields.length; j < len2; j++) {
+            // promote the field fields[j] of x[from] to field as[i] of x;
+            x[as[j]] = fields[j](from(x) || {})
+          }
+        }
+      }
+
+      return input;
+    });
+
+    node.from = function(field) {
+      from = util.accessor(field);
+      from_base = util.field(field)[0];
+      return node;
+    };
+
+    node.fields = function(fs) {
+      fields = fs.map(util.accessor);
+      base_fields = fs.map(function(f) {
+        return util.field(f)[0];
+      });
+      if(!as.length) as = fs;
+      return node;
+    };
+
+    node.as = function(fs) {
+      as = fs;
+      return node;
+    };
+
+    return node;
+  };
+});
+
 define('util/bins',['require','exports','module'],function(require, module, exports) {
 
   function bisect(a, x) {
@@ -4924,9 +4983,10 @@ define('transforms/zip',['require','exports','module','../util/index','../core/c
     return node;
   };
 });
-define('transforms/index',['require','exports','module','./aggregate','./bin','./facet','./filter','./fold','./formula','./sort','./zip'],function(require, exports, module) {
+define('transforms/index',['require','exports','module','./aggregate','./copy','./bin','./facet','./filter','./fold','./formula','./sort','./zip'],function(require, exports, module) {
   return {
     aggregate:  require('./aggregate'),
+    copy:       require('./copy'),
     bin:        require('./bin'),
     facet:      require('./facet'),
     filter:     require('./filter'),
@@ -4936,6 +4996,7 @@ define('transforms/index',['require','exports','module','./aggregate','./bin','.
     zip:        require('./zip')
   };
 });
+
 define('parse/transforms',['require','exports','module','../util/index','../transforms/index'],function(require, exports, module) {
   var util = require('../util/index'),
       transforms = require('../transforms/index');
