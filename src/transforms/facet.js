@@ -4,15 +4,20 @@ define(function(require, exports, module) {
       changeset = require('../core/changeset');
 
   return function facet(model) {
-    var groupby = [], pipeline = [];
-
-    var ADD = 1, MOD = 2;
-    var cells = {};
+    var groupby   = [],   // FieldAccessors | SignalNames
+        accessors = [],
+        pipeline  = [],
+        cells = {},
+        ADD = 1, MOD = 2;
   
-    function cell(x) {
-      // TODO: consider more efficient key constructions?
-      var keys = groupby.reduce(function(v,f) {
-        return (v.push(f(x)), v);
+    function cell(x, prev, stamp) {
+      var keys = accessors.reduce(function(v, f) {
+        var p = f(x._prev);
+        if(prev && (p = f(x._prev)) !== undefined && p.stamp >= stamp) {
+          return (v.push(p.value), v);
+        } else {
+          return (v.push(f(x)), v);
+        }
       }, []), k = keys.join("|");
 
       if(cells[k]) return cells[k];
@@ -49,8 +54,23 @@ define(function(require, exports, module) {
     var node = new model.Node(function(input) {
       util.debug(input, ["faceting"]);
 
-      var output = changeset.create(input);
-      var k, c, x, d;
+      var output = changeset.create(input),
+          k, c, x, d, i, len;
+
+      // If a signal specifying keys has changed, invalidate all cells and
+      // recompile accessors based on new signal value. 
+      if(node._deps.signals.some(function(s) { return !!input.signals[s] })) {
+        for(k in cells) {
+          c = cells[k];
+          output.rem.push(c.t);
+          c.delete();
+        }
+
+        for(i=0, len=groupby.length; i<len; ++i) {
+          if(util.isFunction(groupby[i])) continue;
+          accessors[i] = util.accessor(model.signal(groupby[i]).value());
+        }
+      }
 
       input.add.forEach(function(x) {
         var c = cell(x);
@@ -60,9 +80,23 @@ define(function(require, exports, module) {
       });
 
       input.mod.forEach(function(x) {
-        var c = cell(x);
+        var c = cell(x), 
+            prev = cell(x, true, input.stamp);
+
+        if(c !== prev) {
+          prev.count -= 1;
+          prev.s |= MOD;
+          prev.ds._input.rem.push(x);
+        }
+
+        if(c.s & ADD) {
+          c.count += 1;
+          c.ds._input.add.push(x);
+        } else {
+          c.ds._input.mod.push(x);
+        }
+
         c.s |= MOD;
-        c.ds._input.mod.push(x);
       });
 
       input.rem.forEach(function(x) {
@@ -96,7 +130,6 @@ define(function(require, exports, module) {
       var k, t, d, data = [];
       for(k in cells) {
         t = cells[k].t, d = model.data("vg_"+t._id).values();
-        // console.log("facet data", t._id, d);
         data.push({_id: t._id, values: d });
       }
 
@@ -110,7 +143,17 @@ define(function(require, exports, module) {
     };
 
     node.keys = function(k) {
-      groupby = util.array(k).map(util.accessor);
+      util.array(k).forEach(function(x) {
+        if(model.signal(x)) {
+          node._deps.signals.push(x);
+          groupby.push(x);
+          accessors.push(util.accessor(model.signal(x).value()));
+        } else {
+          groupby.push(x = util.accessor(x));
+          accessors.push(x);
+        }
+      });
+
       return node;
     };
 
