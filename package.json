@@ -2,13 +2,14 @@
   "name": "vega",
   "version": "2.0.0",
   "dependencies": {
-    "d3": "3.4.x",
+    "d3": "3.5.x",
     "topojson": "^1.6.18"
   },
   "devDependencies": {
     "almond": "0.3.x",
     "amd-loader": "0.0.5",
     "ascii-tree": "0.1.x",
+    "canvas": "1.2.x",
     "chai": "^1.10.0",
     "grunt": "0.4.x",
     "grunt-contrib-jshint": "^0.10.0",
@@ -17,8 +18,12 @@
     "grunt-contrib-watch": "^0.6.1",
     "grunt-mocha-test": "^0.12.6",
     "mocha": "^2.1.0",
+    "mocha-jsdom": "0.2.x",
     "pegjs": "0.8.x",
-    "requirejs": "2.1.x"
+    "requirejs": "2.1.x",
+    "xmldom": "0.1.19",
+    "xpath": "0.0.9",
+    "yargs": "^2.3.0"
   },
   "scripts": {
     "test": "grunt test"

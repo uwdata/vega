@@ -1,5 +1,6 @@
 define(function(require, module, exports) {
   var Bounds = require('../core/Bounds'),
+      Canvas = require('canvas'),
       canvas = require('../render/canvas/path'),
       util = require('./index'),
       config = require('./config');
@@ -14,16 +15,7 @@ define(function(require, module, exports) {
       gfx = null;
 
   function context() {
-    // TODO: how to check if nodeJS in requireJS?
-    return gfx || (gfx = (/*config.isNode
-      ? new (require("canvas"))(1,1)
-      : */d3.select("body").append("canvas")
-          .attr("class", "vega_hidden")
-          .attr("width", 1)
-          .attr("height", 1)
-          .style("display", "none")
-          .node())
-      .getContext("2d"));
+    return gfx || (gfx = (new Canvas(1,1)).getContext("2d"));
   }
 
   function pathBounds(o, path, bounds) {

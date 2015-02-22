@@ -28,7 +28,7 @@ define(function(require, exports, module) {
       parseData.datasource(model, d);
     });
 
-    if (count === 0) setTimeout(callback, 1);
+    if (count === 0) callback();
     return spec;
   };
 

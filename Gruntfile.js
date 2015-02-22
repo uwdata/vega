@@ -8,10 +8,11 @@ module.exports = function(grunt) {
           baseUrl: "src",
           paths: {
             d3: "../node_modules/d3/d3.min",
-            topojson: "../node_modules/topojson/topojson.min"
+            topojson: "../node_modules/topojson/topojson.min",
+            canvas: "../node_modules/canvas/lib/canvas",
           },
           include: ["../node_modules/almond/almond", "parse/spec"],
-          exclude: ["d3", "topojson"],
+          exclude: ["d3", "topojson", "canvas"],
           out: "vega2.js",
           wrap: {
               startFile: "src/_start.js",

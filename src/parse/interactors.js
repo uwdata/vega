@@ -127,7 +127,7 @@ define(function(require, exports, module) {
       }
     });
 
-    if (count === 0) setTimeout(inject, 1);
+    if (count === 0) inject();
     return spec;
   }
 });

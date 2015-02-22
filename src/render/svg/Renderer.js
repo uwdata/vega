@@ -1,5 +1,6 @@
 define(function(require, module, exports) {
   var util = require('../../util/index'),
+      d3 = require('d3'),
       marks = require('./marks');
 
   var renderer = function() {

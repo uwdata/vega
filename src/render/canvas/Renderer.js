@@ -1,6 +1,7 @@
 define(function(require, exports, module) {  
   var d3 = require('d3'),
       Bounds = require('../../core/Bounds'),
+      Canvas = require('canvas'),
       load = require('../../util/load'),
       config = require('../../util/config'),
       marks = require('./marks');
@@ -196,14 +197,14 @@ define(function(require, exports, module) {
 
     renderer._imgload += 1;
     if (config.isNode) {
-      // TODO: how to check if nodeJS in requireJS?
-      // image = new (require('canvas').Image)();
-      // load(uri, function(err, data) {
-      //   if (err) { util.error(err); return; }
-      //   image.src = data;
-      //   image.loaded = true;
-      //   renderer._imgload -= 1;
-      // });
+      var cnvs = 'canvas';
+      image = new (require(cnvs).Image)();
+      load(uri, function(err, data) {
+         if (err) { util.error(err); return; }
+         image.src = data;
+         image.loaded = true;
+         renderer._imgload -= 1;
+      });
     } else {
       image = new Image();
       url = config.baseURL + uri;

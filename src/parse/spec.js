@@ -28,9 +28,10 @@ define(function(require, exports, module) {
         padding: parsePadding(spec.padding),
         signals: parseSignals(model, spec.signals),
         predicates: parsePredicates(model, spec.predicates),
-        marks: parseMarks(model, spec, width, height),
-        data: parseData(model, spec.data, function() { callback(viewFactory(model)); })
+        marks: parseMarks(model, spec, width, height)
       });
+
+      model.data(parseData(model, spec.data, function() { callback(viewFactory(model)); }))
     });
   }
 });
