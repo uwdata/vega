@@ -17,8 +17,11 @@ var svgHeader =
 // import required libraries
 var path = require("path");
 var fs = require("fs");
-
 var vg = require("../vega2");
+var cv = require("canvas");
+
+vg.importModule("canvas", function() { return cv; }); // for text measuring
+vg.importModule("fs", function() { return fs; }); // for loading external data
 
 // arguments
 var args = require("yargs")

@@ -4,6 +4,7 @@ define(function(require, module, exports) {
       config = require('../../util/config');
   
   var renderer = function() {
+    this._gcounter = 0;
     this._text = {
       head: "",
       root: "",
@@ -120,7 +121,12 @@ define(function(require, module, exports) {
         defs = this._defs,
         svg = "", i, sty;
 
-    svg += open('g', {'class': cssClass(scene.def)});
+    var cls = cssClass(scene.def);
+
+    svg += open('g', {
+      'id': 'g' + ++this._gcounter, // d3 compat
+      'class': cssClass(scene.def)
+    }, (cls === 'type-rule' ? 'style="pointer-events: none;"' : null));
 
     for (i=0; i<data.length; ++i) {
       sty = tag === 'g' ? null : style(data[i], tag, defs);
@@ -382,19 +388,19 @@ define(function(require, module, exports) {
       value = o[prop];
 
       if (value == null) {
-        if (name === "fill") s += 'fill:none;';
+        if (name === "fill") s += 'fill: none;';
       } else {
         if (value.id) {
           // ensure definition is included
           defs.gradient[value.id] = value;
           value = "url(" + window.location.href + "#" + value.id + ")";
         }
-        s += name + ':' + value + ';'
+        s += (s.length ? ' ' : '') + name + ': ' + value + ';'
       }
     }
     
     if (tag === 'text') {
-      s += 'font:' + fontString(o); + ';';
+      s += (s.length ? ' ' : '') + 'font:' + fontString(o); + ';';
     }
     
     return s.length ? 'style="'+s+'"' : null;

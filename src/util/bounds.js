@@ -1,6 +1,5 @@
 define(function(require, module, exports) {
   var Bounds = require('../core/Bounds'),
-      Canvas = require('canvas'),
       canvas = require('../render/canvas/path'),
       util = require('./index'),
       config = require('./config');
@@ -15,7 +14,20 @@ define(function(require, module, exports) {
       gfx = null;
 
   function context() {
-    return gfx || (gfx = (new Canvas(1,1)).getContext("2d"));
+    if (gfx) {
+      return gfx;
+    } else if (config.isNode) {
+      var canvasName = "canvas";
+      return gfx = (new (require(canvasName))(1,1)).getContext("2d");
+    } else {
+      return gfx = (d3.select("body").append("canvas")
+          .attr("class", "vega_hidden")
+          .attr("width", 1)
+          .attr("height", 1)
+          .style("display", "none")
+          .node())
+          .getContext("2d");
+    }
   }
 
   function pathBounds(o, path, bounds) {

@@ -10,6 +10,7 @@ module.exports = function(grunt) {
             d3: "../node_modules/d3/d3.min",
             topojson: "../node_modules/topojson/topojson.min",
             canvas: "../node_modules/canvas/lib/canvas",
+            heap: "../node_modules/heap/lib/heap"
           },
           include: ["../node_modules/almond/almond", "parse/spec"],
           exclude: ["d3", "topojson", "canvas"],

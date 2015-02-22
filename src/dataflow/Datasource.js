@@ -17,7 +17,7 @@ define(function(require, exports, module) {
 
     this._pipeline  = null; // Pipeline of transformations.
     this._collector = null; // Collector to materialize output of pipeline
-    this._needsPrev = false; // Does any pipeline operator need to track prev?
+    this._revises = false; // Does any pipeline operator need to track prev?
   };
 
   var proto = Datasource.prototype;
@@ -29,22 +29,22 @@ define(function(require, exports, module) {
   };
 
   proto.add = function(d) {
-    var add = this._input.add,
-        prev = this._needsPrev ? null : undefined;
+    var prev = this._revises ? null : undefined;
 
-    add.push.apply(add, util.array(d).map(function(d) { return tuple.create(d, prev); }));
+    this._input.add = this._input.add
+      .concat(util.array(d).map(function(d) { return tuple.ingest(d, prev); }));
     return this;
   };
 
   proto.remove = function(where) {
     var d = this._data.filter(where);
-    this._input.rem.push.apply(this._input.rem, d);
+    this._input.rem = this._input.rem.concat(d);
     return this;
   };
 
   proto.update = function(where, field, func) {
     var mod = this._input.mod,
-        prev = this._needsPrev ? null : undefined; 
+        prev = this._revises ? null : undefined; 
 
     this._input.fields[field] = 1;
     this._data.filter(where).forEach(function(x) {
@@ -52,8 +52,7 @@ define(function(require, exports, module) {
           next = func(x);
       if (prev !== next) {
         if(x._prev === undefined && prev !== undefined) x._prev = C.SENTINEL;
-        tuple.prev(x, field);
-        x.__proto__[field] = next;
+        tuple.set(x, field, next);
         if(mod.indexOf(x) < 0) mod.push(x);
       }
     });
@@ -70,16 +69,18 @@ define(function(require, exports, module) {
     return this;
   };
 
-  proto.needsPrev = function(p) {
+  proto.revises = function(p) {
+    if(!arguments.length) return this._revises;
+
     // If we've not needed prev in the past, but a new dataflow node needs it now
     // ensure existing tuples have prev set.
-    if(!this._needsPrev && p) { 
+    if(!this._revises && p) { 
       this._data.forEach(function(d) { 
         if(d._prev === undefined) d._prev = C.SENTINEL 
       });
     }
 
-    this._needsPrev = this._needsPrev || p;
+    this._revises = this._revises || p;
     return this;
   };
 
@@ -98,7 +99,7 @@ define(function(require, exports, module) {
       // the output.
       ds._collector = new Collector(this._graph);
       pipeline.push(ds._collector);
-      ds._needsPrev = pipeline.some(function(p) { return p.needsPrev(); });
+      ds._revises = pipeline.some(function(p) { return p.revises(); });
     }
 
     // Input node applies the datasource's delta, and propagates it to 
@@ -114,7 +115,7 @@ define(function(require, exports, module) {
           out = changeset.create(input);
 
       if(input.reflow) {
-        out.mod = ds._source ? ds._source.values().slice() : ds._data.slice();
+        out.mod = ds._data.slice();
       } else {
         // update data
         var delta = ds._input;
@@ -168,14 +169,14 @@ define(function(require, exports, module) {
   proto.listener = function() { 
     var l = new Node(this._graph),
         dest = this,
-        prev = this._needsPrev ? null : undefined;
+        prev = this._revises ? null : undefined;
 
     l.evaluate = function(input) {
       this._cache = this._cache || {};  // to propagate tuples correctly
       var output  = changeset.create(input);
 
       output.add = input.add.map(function(t) {
-        return (l._cache[t._id] = tuple.create(t, t._prev !== undefined ? t._prev : prev));
+        return (l._cache[t._id] = tuple.derive(t, t._prev !== undefined ? t._prev : prev));
       });
       output.mod = input.mod.map(function(t) { return l._cache[t._id]; });
       output.rem = input.rem.map(function(t) { 

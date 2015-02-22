@@ -32,15 +32,19 @@ describe('Headless', function() {
 
             // the DOM element doesn't include the namespace; stick it in so the
             // same xpath will validate and XML string equivalence can be tested
-            svg2 = svg2.replace(/^<svg ([^>]*)>/,
-              '<svg $1 version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">');
+            if (config.svgNamespace) {
+              svg2 = svg2.replace(/^<svg ([^>]*)>/,
+                '<svg $1 ' + config.svgNamespace + '>');
+            }
 
-            validateSVG(svg2, name + "-svg", function(doc, xpath) {
-              validator(doc, xpath);
+            validateSVG(svg2, name + "-svg", function(doc2, xpath2) {
+              validator(doc2, xpath2);
+
+              // compare the strings line-by-line (for easier visual debugging)
+              function pretty(xml) { return xml.replace(/></g, '>\n<'); }
+              // expect(pretty(svg)).to.equal(pretty(svg2));
             });
 
-            // TODO: do the SVGs really need to be identical?
-            // expect(svg).to.equal(svg2);
 
             done();
           }
@@ -76,7 +80,7 @@ describe('Headless', function() {
   describe('SVG', function() {
 
     it('renders the same SVG', function(done) {
-      var spec = blankSpec;
+      var spec = exampleSpecBar;
 
       // assume we will have at least one mark per data items
       var dcount = (spec.data||[]).reduce(function(s, d) {
