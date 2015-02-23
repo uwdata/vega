@@ -9256,7 +9256,7 @@ define('render/svg/index',['require','exports','module','./Handler','./Renderer'
     Renderer: require('./Renderer')
   };
 });
-define('render/xml/svg',['require','exports','module','d3','../../util/index','../../util/config'],function(require, module, exports) {
+define('render/svg-headless/svg',['require','exports','module','d3','../../util/index','../../util/config'],function(require, module, exports) {
   var d3 = require('d3'),
       util = require('../../util/index'),
       config = require('../../util/config');
@@ -9695,7 +9695,7 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
   return renderer;
 });
 
-define('render/xml/Renderer',['require','exports','module','d3','../../util/index','../../util/config','./svg'],function(require, exports, module) {
+define('render/svg-headless/Renderer',['require','exports','module','d3','../../util/index','../../util/config','./svg'],function(require, exports, module) {
   var d3 = require('d3'),
       util = require('../../util/index'),
       config = require('../../util/config');
@@ -9740,7 +9740,7 @@ define('render/xml/Renderer',['require','exports','module','d3','../../util/inde
   return renderer;
 });
 
-define('render/xml/index',['require','exports','module','./Renderer'],function(require, exports, module) {
+define('render/svg-headless/index',['require','exports','module','./Renderer'],function(require, exports, module) {
   return {
     Renderer: require('./Renderer')
   };
@@ -9843,13 +9843,13 @@ define('scene/Transition',['require','exports','module','../dataflow/tuple','../
   
   return Transition;
 });
-define('core/View',['require','exports','module','d3','../dataflow/Node','../parse/streams','../render/canvas/index','../render/svg/index','../render/xml/index','../scene/Transition','../util/config','../util/index','../dataflow/changeset'],function(require, exports, module) {
+define('core/View',['require','exports','module','d3','../dataflow/Node','../parse/streams','../render/canvas/index','../render/svg/index','../render/svg-headless/index','../scene/Transition','../util/config','../util/index','../dataflow/changeset'],function(require, exports, module) {
   var d3 = require('d3'),
       Node = require('../dataflow/Node'),
       parseStreams = require('../parse/streams'),
       canvas = require('../render/canvas/index'),
       svg = require('../render/svg/index'),
-      xml = require('../render/xml/index'),
+      svgh = require('../render/svg-headless/index'),
       Transition = require('../scene/Transition'),
       config = require('../util/config'),
       util = require('../util/index'),
@@ -9969,7 +9969,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
 
     if (type === "canvas") type = canvas;
     else if (type === "svg") type = svg;
-    else if (type === "xml") type = xml;
+    else if (type === "svg-headless") type = svgh;
     else if (util.isString(type)) throw new Error("Unknown renderer: " + type);
     else if (!type) throw new Error("No renderer specified");
 

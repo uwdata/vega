@@ -48,8 +48,8 @@ describe('SVG', function() {
   function compareSVG(name, spec, validator, done) {
     parseSpec(spec, function(viewFactory) {
       // first use the string renderer
-      var svg = viewFactory({ renderer: "xml" }).update().renderer().svg();
-      validateSVG(svg, name + "-xml", function(doc, xpath) {
+      var svg = viewFactory({ renderer: "svg-headless" }).update().renderer().svg();
+      validateSVG(svg, name + "-svgh", function(doc, xpath) {
         validator(doc, xpath);
       });
 
@@ -82,7 +82,7 @@ describe('SVG', function() {
                 '<svg $1 ' + config.svgNamespace + '>');
             }
 
-            validateSVG(svg2, name + "-svg", function(doc2, xpath2) {
+            validateSVG(svg2, name + "-svgd", function(doc2, xpath2) {
               validator(doc2, xpath2);
 
               function fixup(xml, jsdom) {

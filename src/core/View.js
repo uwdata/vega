@@ -4,7 +4,7 @@ define(function(require, exports, module) {
       parseStreams = require('../parse/streams'),
       canvas = require('../render/canvas/index'),
       svg = require('../render/svg/index'),
-      xml = require('../render/xml/index'),
+      svgh = require('../render/svg-headless/index'),
       Transition = require('../scene/Transition'),
       config = require('../util/config'),
       util = require('../util/index'),
@@ -124,7 +124,7 @@ define(function(require, exports, module) {
 
     if (type === "canvas") type = canvas;
     else if (type === "svg") type = svg;
-    else if (type === "xml") type = xml;
+    else if (type === "svg-headless") type = svgh;
     else if (util.isString(type)) throw new Error("Unknown renderer: " + type);
     else if (!type) throw new Error("No renderer specified");
 
