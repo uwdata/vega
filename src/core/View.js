@@ -119,12 +119,8 @@ define(function(require, exports, module) {
     return this;
   };
 
-  prototype.foo = function() {
-    return "bar";
-  };
-
   prototype.renderer = function(type) {
-    if (!arguments.length) return this._io;
+    if (!arguments.length) return this._renderer;
 
     if (type === "canvas") type = canvas;
     else if (type === "svg") type = svg;

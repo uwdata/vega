@@ -914,6 +914,9 @@ define('util/config',['require','exports','module','d3'],function(require, modul
 
   config.debug = false;
 
+  // prevent calls to console.log
+  config.silent = false;
+
   // are we running in node.js?
   config.isNode = typeof window === 'undefined';
 
@@ -1277,17 +1280,19 @@ define('util/index',['require','exports','module','./config'],function(require, 
   }
 
   util.log = function(msg) {
+    if (config.silent) return;
     vg_write("[Vega Log] " + msg);
   };
 
   util.error = function(msg) {
+    if (config.silent) return;
     msg = "[Vega Err] " + msg;
     vg_write(msg);
     if (typeof alert !== "undefined") alert(msg);
   };
 
   util.debug = function(input, args) {
-    if(!config.debug) return;
+    if (!config.debug) return;
     var log = Function.prototype.bind.call(console.log, console);
     args.unshift(input.stamp||-1);
     if(input.add) args.push(input.add.length, input.mod.length, input.rem.length, !!input.reflow);
@@ -3156,7 +3161,7 @@ define('util/bounds',['require','exports','module','../core/Bounds','../render/c
       if (items.length) {
         items[0].bounds = func(items[0], bounds);
       }
-    } else {
+    } else if (func) {
       for (i=0, len=items.length; i<len; ++i) {
         bounds.union(itemBounds(items[i], func, opt));
       }
@@ -5466,7 +5471,7 @@ define('parse/properties',['require','exports','module','../dataflow/tuple','../
       signals.concat(ref.signals);
       scales.concat(ref.scales);
 
-      if(predName) {
+      if(pred && predName) {
         signals.push.apply(signals, pred.signals);
         db.push.apply(db, pred.data);
         inputs.push(args+" = {"+input.join(', ')+"}");
@@ -5583,6 +5588,7 @@ define('parse/properties',['require','exports','module','../dataflow/tuple','../
 
   return compile;
 });
+
 define('parse/mark',['require','exports','module','../util/index','./properties'],function(require, exports, module) {
   var util = require('../util/index'),
       parseProperties = require('./properties');
@@ -9198,7 +9204,9 @@ define('render/svg/Renderer',['require','exports','module','../../util/index','d
   prototype.draw = function(ctx, scene, index) {
     var marktype = scene.marktype,
         renderer = marks.draw[marktype];
-    renderer.call(this, ctx, scene, index);
+    if (renderer) { // only draw when we have a renderer
+      renderer.call(this, ctx, scene, index);
+    }
   };
   
   return renderer;
@@ -9316,6 +9324,11 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
       defs += close("clipPath");
     }
     
+    if (defs.length > 0) {
+      return open("defs") + defs + close("defs");
+    } else {
+      return ""
+    }
     return defs;
   };
   
@@ -9326,8 +9339,11 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
   };
 
   prototype.draw = function(scene) {
-    var meta = MARKS[scene.marktype],
-        tag  = meta[0],
+    var meta = MARKS[scene.marktype];
+    if (!meta) {
+      return; // no known marktype (e.g., an interactor)
+    }
+    var tag  = meta[0],
         attr = meta[1],
         nest = meta[2] || false,
         data = nest ? [scene.items] : scene.items,
@@ -9418,8 +9434,9 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
     var w = o.width || 0,
         h = o.height || 0;
 
-    var styl = o.mark.interactive === true ? 'style=""'
-      : 'style="pointer-events: none;"';
+    var styl = o.mark.interactive === false ?
+      'style="pointer-events: none;"' : 
+      'style=""';
 
     return open('rect', {
       'class': 'background'
@@ -9602,6 +9619,11 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
     if (o === null) return null;
 
     var s = "";
+
+    if (tag === 'text') {
+      s += 'font: ' + fontString(o) + ';';
+    }
+    
     for (i=0, n=styleProps.length; i<n; ++i) {
       prop = styleProps[i];
       name = styles[prop];
@@ -9617,11 +9639,6 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
         }
         s += (s.length ? ' ' : '') + name + ': ' + value + ';'
       }
-    }
-    
-    if (tag === 'text') {
-      // FIXME: the d3 dom doesn't include the default font; should we?
-      // s += (s.length ? ' ' : '') + 'font: ' + fontString(o); + ';';
     }
     
     // not that we don't exclude blank styles for d3 dom compat
@@ -9673,6 +9690,7 @@ define('render/xml/Renderer',['require','exports','module','d3','../../util/inde
   };
 
   prototype.render = function(scene, items) {
+    // headless always draws the entire scene, ignoring items
     this._builder.render(scene);
     return this;
   };
@@ -9908,12 +9926,8 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
     return this;
   };
 
-  prototype.foo = function() {
-    return "bar";
-  };
-
   prototype.renderer = function(type) {
-    if (!arguments.length) return this._io;
+    if (!arguments.length) return this._renderer;
 
     if (type === "canvas") type = canvas;
     else if (type === "svg") type = svg;

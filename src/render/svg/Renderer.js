@@ -129,7 +129,9 @@ define(function(require, module, exports) {
   prototype.draw = function(ctx, scene, index) {
     var marktype = scene.marktype,
         renderer = marks.draw[marktype];
-    renderer.call(this, ctx, scene, index);
+    if (renderer) { // only draw when we have a renderer
+      renderer.call(this, ctx, scene, index);
+    }
   };
   
   return renderer;

@@ -287,7 +287,7 @@ define(function(require, module, exports) {
       if (items.length) {
         items[0].bounds = func(items[0], bounds);
       }
-    } else {
+    } else if (func) {
       for (i=0, len=items.length; i<len; ++i) {
         bounds.union(itemBounds(items[i], func, opt));
       }

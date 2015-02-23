@@ -31,6 +31,7 @@ define(function(require, exports, module) {
   };
 
   prototype.render = function(scene, items) {
+    // headless always draws the entire scene, ignoring items
     this._builder.render(scene);
     return this;
   };

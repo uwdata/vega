@@ -104,6 +104,11 @@ define(function(require, module, exports) {
       defs += close("clipPath");
     }
     
+    if (defs.length > 0) {
+      return open("defs") + defs + close("defs");
+    } else {
+      return ""
+    }
     return defs;
   };
   
@@ -114,8 +119,11 @@ define(function(require, module, exports) {
   };
 
   prototype.draw = function(scene) {
-    var meta = MARKS[scene.marktype],
-        tag  = meta[0],
+    var meta = MARKS[scene.marktype];
+    if (!meta) {
+      return; // no known marktype (e.g., an interactor)
+    }
+    var tag  = meta[0],
         attr = meta[1],
         nest = meta[2] || false,
         data = nest ? [scene.items] : scene.items,
@@ -206,8 +214,9 @@ define(function(require, module, exports) {
     var w = o.width || 0,
         h = o.height || 0;
 
-    var styl = o.mark.interactive === true ? 'style=""'
-      : 'style="pointer-events: none;"';
+    var styl = o.mark.interactive === false ?
+      'style="pointer-events: none;"' : 
+      'style=""';
 
     return open('rect', {
       'class': 'background'
@@ -390,6 +399,11 @@ define(function(require, module, exports) {
     if (o === null) return null;
 
     var s = "";
+
+    if (tag === 'text') {
+      s += 'font: ' + fontString(o) + ';';
+    }
+    
     for (i=0, n=styleProps.length; i<n; ++i) {
       prop = styleProps[i];
       name = styles[prop];
@@ -405,11 +419,6 @@ define(function(require, module, exports) {
         }
         s += (s.length ? ' ' : '') + name + ': ' + value + ';'
       }
-    }
-    
-    if (tag === 'text') {
-      // FIXME: the d3 dom doesn't include the default font; should we?
-      // s += (s.length ? ' ' : '') + 'font: ' + fontString(o); + ';';
     }
     
     // not that we don't exclude blank styles for d3 dom compat

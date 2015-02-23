@@ -10,7 +10,6 @@
   } else {
     // Browser globals (root is window)
     var tj = (typeof topojson === 'undefined') ? null : topojson;
-
     root.vg = factory(d3, tj);
   }
 }(this, function (d3, topojson) {

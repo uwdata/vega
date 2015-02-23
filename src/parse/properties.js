@@ -118,7 +118,7 @@ define(function(require, exports, module) {
       signals.concat(ref.signals);
       scales.concat(ref.scales);
 
-      if(predName) {
+      if(pred && predName) {
         signals.push.apply(signals, pred.signals);
         db.push.apply(db, pred.data);
         inputs.push(args+" = {"+input.join(', ')+"}");

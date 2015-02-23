@@ -219,17 +219,19 @@ define(function(require, module, exports) {
   }
 
   util.log = function(msg) {
+    if (config.silent) return;
     vg_write("[Vega Log] " + msg);
   };
 
   util.error = function(msg) {
+    if (config.silent) return;
     msg = "[Vega Err] " + msg;
     vg_write(msg);
     if (typeof alert !== "undefined") alert(msg);
   };
 
   util.debug = function(input, args) {
-    if(!config.debug) return;
+    if (!config.debug) return;
     var log = Function.prototype.bind.call(console.log, console);
     args.unshift(input.stamp||-1);
     if(input.add) args.push(input.add.length, input.mod.length, input.rem.length, !!input.reflow);

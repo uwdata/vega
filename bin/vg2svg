@@ -69,7 +69,7 @@ function render(spec) {
   vg.parse.spec(spec, function(factory) {
     var view = factory({ renderer: "xml" });
     view.update();
-    var svg = view._renderer.svg();
+    var svg = view.renderer().svg();
     writeSVG(svg, outputFile);
   });
 }

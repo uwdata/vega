@@ -4,6 +4,9 @@ define(function(require, module, exports) {
 
   config.debug = false;
 
+  // prevent calls to console.log
+  config.silent = false;
+
   // are we running in node.js?
   config.isNode = typeof window === 'undefined';
 
