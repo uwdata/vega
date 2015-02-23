@@ -10460,10 +10460,11 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
         marks: parseMarks(model, spec, width, height)
       });
 
-      model.data(parseData(model, spec.data, function() { callback(viewFactory(model)); }))
+      parseData(model, spec.data, function() { callback(viewFactory(model)); });
     });
   }
 });
+
     // d3 doesn't expose itself when running under AMD, so
     // we do it manually. 
     // See: https://github.com/mbostock/d3/issues/1693

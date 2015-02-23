@@ -31,7 +31,7 @@ define(function(require, exports, module) {
         marks: parseMarks(model, spec, width, height)
       });
 
-      model.data(parseData(model, spec.data, function() { callback(viewFactory(model)); }))
+      parseData(model, spec.data, function() { callback(viewFactory(model)); });
     });
   }
 });
