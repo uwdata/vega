@@ -28,6 +28,7 @@ module.exports = function(grunt) {
         options: {
           require: ["d3", "amd-loader"],
           reporter: "spec",
+          timeout: 5000,
         },
         src: ["test/**/*.js"]
       }
