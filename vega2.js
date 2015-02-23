@@ -4643,8 +4643,9 @@ define('util/load',['require','exports','module','./index','./config'],function(
   };
 })
 ;
-define('util/read',['require','exports','module','./index'],function(require, module, exports) {
+define('util/read',['require','exports','module','./index','d3'],function(require, module, exports) {
   var util = require('./index'),
+      d3 = require('d3'),
       formats = {},
       parsers = {
         "number": util.number,
@@ -4726,6 +4727,7 @@ define('util/read',['require','exports','module','./index'],function(require, mo
   read.parse = parseValues;
   return read;
 });
+
 define('parse/data',['require','exports','module','./transforms','./modify','../util/index','../util/load','../util/read'],function(require, exports, module) {
   var parseTransforms = require('./transforms'),
       parseModify = require('./modify'),
@@ -8491,9 +8493,10 @@ define('render/canvas/Renderer',['require','exports','module','d3','../../core/B
       this._ctx = canvas.node().getContext("2d");
       this._ctx._ratio = (s = scaleCanvas(canvas.node(), this._ctx) || 1);
       this._ctx.setTransform(s, 0, 0, s, s*pad.left, s*pad.top);
+
+      initializeLineDash(this._ctx);
     }
     
-    initializeLineDash(this._ctx);
     return this;
   };
   
@@ -8776,9 +8779,6 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
       line_path   = d3.svg.line().x(x).y(y),
       symbol_path = d3.svg.symbol().type(shape).size(size);
   
-  var mark_id = 0,
-      clip_id = 0;
-  
   var textAlign = {
     "left":   "start",
     "center": "middle",
@@ -8939,7 +8939,7 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
 
     if (o.clip) {
       var c = {width: o.width || 0, height: o.height || 0},
-          id = o.clip_id || (o.clip_id = "clip" + clip_id++);
+          id = o.clip_id || (o.clip_id = "clip" + marks.clip_id++);
       marks.current._defs.clipping[id] = c;
       this.setAttribute("clip-path", "url(#"+id+")");
     }
@@ -8972,7 +8972,7 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
         p = (p = grps[index+1]) // +1 to skip group background rect
           ? d3.select(p)
           : g.append("g")
-             .attr("id", "g"+(++mark_id))
+             .attr("id", "g"+(++marks.mark_id))
              .attr("class", cssClass(scene.def));
 
     var id = p.attr("id"),
@@ -9059,11 +9059,14 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
       image:   draw("image", image),
       draw:    draw // expose for extensibility
     },
-    current: null
+    current: null,
+    mark_id: 0,
+    clip_id: 0
   };
   
   return marks;
 });
+
 define('render/svg/Renderer',['require','exports','module','../../util/index','d3','./marks'],function(require, module, exports) {
   var util = require('../../util/index'),
       d3 = require('d3'),
@@ -9165,6 +9168,7 @@ define('render/svg/Renderer',['require','exports','module','../../util/index','d
   };
   
   prototype.render = function(scene, items) {
+    marks.mark_id = 0; // re-initialize mark id
     marks.current = this;
 
     if (items) {
@@ -9212,7 +9216,7 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
       config = require('../../util/config');
   
   var renderer = function() {
-    this._gcounter = 0;
+    this._gid = 0; // group id counter for d3 dom compat
     this._text = {
       head: "",
       root: "",
@@ -9251,8 +9255,8 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
 
     t.head = open('svg', {
       "class": 'marks',
-      width: w,
-      height: h,
+      width: w + pad.left + pad.right,
+      height: h + pad.top + pad.bottom,
     }, config.svgNamespace);
 
     t.root = open('g', {
@@ -9316,6 +9320,7 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
   };
   
   prototype.render = function(scene) {
+    this._gid = 0; // reset the group counter
     this._text.body = this.draw(scene);
     this._text.defs = this.buildDefs();
   };
@@ -9331,13 +9336,20 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
 
     var cls = cssClass(scene.def);
 
+    // style literals to exactly match the d3 dom
+    var styl = null;
+    if (cls === 'type-rule' || cls === 'type-path')
+      styl = 'style="pointer-events: none;"';
+    else if (cls !== 'type-group')
+      styl = 'style=""';
+
     svg += open('g', {
-      'id': 'g' + ++this._gcounter, // d3 compat
+      'id': 'g' + ++this._gid, // d3 dom compat
       'class': cssClass(scene.def)
-    }, (cls === 'type-rule' ? 'style="pointer-events: none;"' : null));
+    }, styl);
 
     for (i=0; i<data.length; ++i) {
-      sty = tag === 'g' ? null : style(data[i], tag, defs);
+      var sty = tag === 'g' ? null : style(data[i], tag, defs);
       svg += open(tag, attr(data[i], defs), sty);
       if (tag === 'text') svg += escape_text(data[i].text);
       if (tag === 'g') svg += this.drawGroup(data[i]);
@@ -9405,13 +9417,13 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
   function group_bg(o) {
     var w = o.width || 0,
         h = o.height || 0;
-    if (w === 0 && h === 0) return "";
+
+    var styl = o.mark.interactive === true ? 'style=""'
+      : 'style="pointer-events: none;"';
 
     return open('rect', {
-      'class': 'background',
-      width: w,
-      height: h
-    }, style(o, 'rect')) + close('rect');
+      'class': 'background'
+    }, styl) + close('rect');
   }
   
   function group(o, defs) {
@@ -9608,10 +9620,12 @@ define('render/xml/svg',['require','exports','module','d3','../../util/index','.
     }
     
     if (tag === 'text') {
-      s += (s.length ? ' ' : '') + 'font:' + fontString(o); + ';';
+      // FIXME: the d3 dom doesn't include the default font; should we?
+      // s += (s.length ? ' ' : '') + 'font: ' + fontString(o); + ';';
     }
     
-    return s.length ? 'style="'+s+'"' : null;
+    // not that we don't exclude blank styles for d3 dom compat
+    return 'style="'+s+'"';
   }
 
   function fontString(o) {
@@ -9652,11 +9666,8 @@ define('render/xml/Renderer',['require','exports','module','d3','../../util/inde
 
     var w = this._width, h = this._height, pad = this._padding;
     
-    var tw = w + (pad ? pad.left + pad.right : 0),
-        th = h + (pad ? pad.top + pad.bottom : 0);
-
     // (re-)configure builder size
-    this._builder.initialize(null, tw, th, pad);
+    this._builder.initialize(null, w, h, pad);
 
     return this;
   };
@@ -9852,8 +9863,8 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
         this._padding = pad;
         this._strict = false;
       }
+      this._renderer.resize(this._width, this._height, pad);
       if (this._el) {
-        this._renderer.resize(this._width, this._height, pad);
         this._handler.padding(pad);
       }
     }

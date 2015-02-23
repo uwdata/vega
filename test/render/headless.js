@@ -4,9 +4,9 @@ describe('Headless', function() {
   var fs = require("fs");
   var path = require("path");
 
-  // Render the given spec using both the headless string renderer and the
-  // standard SVG renderer with a fake JSDOM and compare that the SVG
-  // output is the same with both
+  // Render the given spec using both the headless string renderer
+  // and the standard SVG renderer (in a fake JSDOM)
+  // and compare that the SVG output is identical
   function compareSVG(name, spec, validator, done) {
     parseSpec(spec, function(viewFactory) {
       // first use the string renderer
@@ -71,7 +71,7 @@ describe('Headless', function() {
 
       var doc = new dom().parseFromString(svg);
 
-      /* TODO: where to output test case files?
+      /* TODO: should we save the svg snapshots somewhere?
       if (saveto) {
         var out = fs.createWriteStream(saveto + ".svg");
         out.write(svg);

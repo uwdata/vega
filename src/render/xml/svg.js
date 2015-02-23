@@ -206,7 +206,8 @@ define(function(require, module, exports) {
     var w = o.width || 0,
         h = o.height || 0;
 
-    var styl = !o.width && !o.height ? 'style="pointer-events: none;"' : 'style=""';
+    var styl = o.mark.interactive === true ? 'style=""'
+      : 'style="pointer-events: none;"';
 
     return open('rect', {
       'class': 'background'
