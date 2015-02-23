@@ -15,9 +15,6 @@ define(function(require, module, exports) {
       line_path   = d3.svg.line().x(x).y(y),
       symbol_path = d3.svg.symbol().type(shape).size(size);
   
-  var mark_id = 0,
-      clip_id = 0;
-  
   var textAlign = {
     "left":   "start",
     "center": "middle",
@@ -178,7 +175,7 @@ define(function(require, module, exports) {
 
     if (o.clip) {
       var c = {width: o.width || 0, height: o.height || 0},
-          id = o.clip_id || (o.clip_id = "clip" + clip_id++);
+          id = o.clip_id || (o.clip_id = "clip" + marks.clip_id++);
       marks.current._defs.clipping[id] = c;
       this.setAttribute("clip-path", "url(#"+id+")");
     }
@@ -211,7 +208,7 @@ define(function(require, module, exports) {
         p = (p = grps[index+1]) // +1 to skip group background rect
           ? d3.select(p)
           : g.append("g")
-             .attr("id", "g"+(++mark_id))
+             .attr("id", "g"+(++marks.mark_id))
              .attr("class", cssClass(scene.def));
 
     var id = p.attr("id"),
@@ -298,7 +295,9 @@ define(function(require, module, exports) {
       image:   draw("image", image),
       draw:    draw // expose for extensibility
     },
-    current: null
+    current: null,
+    mark_id: 0,
+    clip_id: 0
   };
   
   return marks;

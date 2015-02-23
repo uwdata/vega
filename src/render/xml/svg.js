@@ -4,7 +4,7 @@ define(function(require, module, exports) {
       config = require('../../util/config');
   
   var renderer = function() {
-    this._gcounter = 0;
+    this._gid = 0; // group id counter for d3 dom compat
     this._text = {
       head: "",
       root: "",
@@ -43,8 +43,8 @@ define(function(require, module, exports) {
 
     t.head = open('svg', {
       "class": 'marks',
-      width: w,
-      height: h,
+      width: w + pad.left + pad.right,
+      height: h + pad.top + pad.bottom,
     }, config.svgNamespace);
 
     t.root = open('g', {
@@ -108,6 +108,7 @@ define(function(require, module, exports) {
   };
   
   prototype.render = function(scene) {
+    this._gid = 0; // reset the group counter
     this._text.body = this.draw(scene);
     this._text.defs = this.buildDefs();
   };
@@ -123,13 +124,20 @@ define(function(require, module, exports) {
 
     var cls = cssClass(scene.def);
 
+    // style literals to exactly match the d3 dom
+    var styl = null;
+    if (cls === 'type-rule' || cls === 'type-path')
+      styl = 'style="pointer-events: none;"';
+    else if (cls !== 'type-group')
+      styl = 'style=""';
+
     svg += open('g', {
-      'id': 'g' + ++this._gcounter, // d3 compat
+      'id': 'g' + ++this._gid, // d3 dom compat
       'class': cssClass(scene.def)
-    }, (cls === 'type-rule' ? 'style="pointer-events: none;"' : null));
+    }, styl);
 
     for (i=0; i<data.length; ++i) {
-      sty = tag === 'g' ? null : style(data[i], tag, defs);
+      var sty = tag === 'g' ? null : style(data[i], tag, defs);
       svg += open(tag, attr(data[i], defs), sty);
       if (tag === 'text') svg += escape_text(data[i].text);
       if (tag === 'g') svg += this.drawGroup(data[i]);
@@ -197,13 +205,12 @@ define(function(require, module, exports) {
   function group_bg(o) {
     var w = o.width || 0,
         h = o.height || 0;
-    if (w === 0 && h === 0) return "";
+
+    var styl = !o.width && !o.height ? 'style="pointer-events: none;"' : 'style=""';
 
     return open('rect', {
-      'class': 'background',
-      width: w,
-      height: h
-    }, style(o, 'rect')) + close('rect');
+      'class': 'background'
+    }, styl) + close('rect');
   }
   
   function group(o, defs) {
@@ -400,10 +407,12 @@ define(function(require, module, exports) {
     }
     
     if (tag === 'text') {
-      s += (s.length ? ' ' : '') + 'font:' + fontString(o); + ';';
+      // FIXME: the d3 dom doesn't include the default font; should we?
+      // s += (s.length ? ' ' : '') + 'font: ' + fontString(o); + ';';
     }
     
-    return s.length ? 'style="'+s+'"' : null;
+    // not that we don't exclude blank styles for d3 dom compat
+    return 'style="'+s+'"';
   }
 
   function fontString(o) {

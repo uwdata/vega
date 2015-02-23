@@ -2,6 +2,7 @@ var config = require('../../src/util/config');
 
 describe('Headless', function() {
   var fs = require("fs");
+  var path = require("path");
 
   // Render the given spec using both the headless string renderer and the
   // standard SVG renderer with a fake JSDOM and compare that the SVG
@@ -40,9 +41,13 @@ describe('Headless', function() {
             validateSVG(svg2, name + "-svg", function(doc2, xpath2) {
               validator(doc2, xpath2);
 
-              // compare the strings line-by-line (for easier visual debugging)
-              function pretty(xml) { return xml.replace(/></g, '>\n<'); }
-              // expect(pretty(svg)).to.equal(pretty(svg2));
+              function fixup(xml) {
+                // compare the strings line-by-line for easier visual debugging
+                xml = xml.replace(/></g, '>\n<');
+                return xml
+              }
+
+              expect(fixup(svg)).to.equal(fixup(svg2));
             });
 
 
@@ -77,21 +82,38 @@ describe('Headless', function() {
       if (validator) validator(doc, xpath);
   }
 
-  describe('SVG', function() {
-
-    it('renders the same SVG', function(done) {
-      var spec = exampleSpecBar;
-
-      // assume we will have at least one mark per data items
-      var dcount = (spec.data||[]).reduce(function(s, d) {
-        return s + d.values.length;
-      }, 0);
-
-      compareSVG("bar", spec, function(doc, xpath) {
-        expect(xpath("//svg:rect", doc).length).to.be.at.least(dcount);
+  function verifyRenderedSVGSpec(specFile, done) {
+    fs.readFile(specFile, "utf8", function(err, text) {
+      if (err) throw err;
+      var spec = JSON.parse(text);
+      compareSVG(path.basename(specFile, ".json"), spec, function(doc, xpath) {
+        // just make sure we have a least one element
+        expect(xpath("//svg:rect", doc).length).to.be.at.least(1);
       }, done);
     });
+  }
+
+  describe('Examples', function() {
+    var examples = [
+      'area',
+      'bar',
+      'barley',
+      'brush',
+      'error',
+      'grouped_bar',
+      'lifelines',
+      'parallel_coords',
+      'stocks',
+      'weather',
+    ];
+    examples.forEach(function(name) {
+      it('renders the ' + name + ' example', function(done) {
+        config.baseURL = 'file://./examples/'; // needed for data loading
+        verifyRenderedSVGSpec('./examples/spec/' + name + '.json', done);
+      });
+    });
   });
+
 
   describe('Canvas', function() {
 

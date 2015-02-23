@@ -52,9 +52,10 @@ define(function(require, exports, module) {
       this._ctx = canvas.node().getContext("2d");
       this._ctx._ratio = (s = scaleCanvas(canvas.node(), this._ctx) || 1);
       this._ctx.setTransform(s, 0, 0, s, s*pad.left, s*pad.top);
+
+      initializeLineDash(this._ctx);
     }
     
-    initializeLineDash(this._ctx);
     return this;
   };
   

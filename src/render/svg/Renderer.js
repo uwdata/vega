@@ -99,6 +99,7 @@ define(function(require, module, exports) {
   };
   
   prototype.render = function(scene, items) {
+    marks.mark_id = 0; // re-initialize mark id
     marks.current = this;
 
     if (items) {

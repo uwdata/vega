@@ -24,11 +24,8 @@ define(function(require, exports, module) {
 
     var w = this._width, h = this._height, pad = this._padding;
     
-    var tw = w + (pad ? pad.left + pad.right : 0),
-        th = h + (pad ? pad.top + pad.bottom : 0);
-
     // (re-)configure builder size
-    this._builder.initialize(null, tw, th, pad);
+    this._builder.initialize(null, w, h, pad);
 
     return this;
   };

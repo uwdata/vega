@@ -74,8 +74,8 @@ define(function(require, exports, module) {
         this._padding = pad;
         this._strict = false;
       }
+      this._renderer.resize(this._width, this._height, pad);
       if (this._el) {
-        this._renderer.resize(this._width, this._height, pad);
         this._handler.padding(pad);
       }
     }
