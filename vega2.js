@@ -1553,8 +1553,7 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
 
   proto.source = function(src) {
     if(!arguments.length) return this._source;
-    this._source = this._graph.data(src);
-    return this;
+    return (this._source = this._graph.data(src));
   };
 
   proto.add = function(d) {
@@ -1580,7 +1579,6 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
       var prev = x[field],
           next = func(x);
       if (prev !== next) {
-        if(x._prev === undefined && prev !== undefined) x._prev = C.SENTINEL;
         tuple.set(x, field, next);
         if(mod.indexOf(x) < 0) mod.push(x);
       }
@@ -1598,15 +1596,16 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
     return this;
   };
 
+  function set_prev(d) { if(d._prev === undefined) d._prev = C.SENTINEL; }
+
   proto.revises = function(p) {
     if(!arguments.length) return this._revises;
 
     // If we've not needed prev in the past, but a new dataflow node needs it now
     // ensure existing tuples have prev set.
-    if(!this._revises && p) { 
-      this._data.forEach(function(d) { 
-        if(d._prev === undefined) d._prev = C.SENTINEL 
-      });
+    if(!this._revises && p) {
+      this._data.forEach(set_prev);
+      this._input.add.forEach(set_prev); // New tuples that haven't yet been merged into _data
     }
 
     this._revises = this._revises || p;
@@ -1622,6 +1621,7 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
 
   proto.pipeline = function(pipeline) {
     var ds = this, n, c;
+    if(!arguments.length) return this._pipeline;
 
     if(pipeline.length) {
       // If we have a pipeline, add a collector to the end to materialize
@@ -1728,6 +1728,8 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
     } else {
       this._pipeline[this._pipeline.length-1].addListener(l);      
     }
+
+    return this;
   };
 
   proto.removeListener = function(l) {
@@ -4771,7 +4773,7 @@ define('parse/data',['require','exports','module','./transforms','./modify','../
       parseData.datasource(model, d);
     });
 
-    if (count === 0) callback();
+    if (count === 0) setTimeout(callback, 1);
     return spec;
   };
 
@@ -4782,11 +4784,10 @@ define('parse/data',['require','exports','module','./transforms','./modify','../
 
     if(d.values) ds.values(read(d.values, d.format));
     else if(d.source) {
-      ds.source(d.source);
-
-      // The derived datasource will be pulsed by its src rather than the model.
-      model.data(d.source).addListener(ds);
-      model.removeListener(ds._pipeline[0]); 
+      ds.source(d.source)
+        .revises(ds.revises()) // If new ds revises, then it's origin must revise too.
+        .addListener(ds);  // Derived ds will be pulsed by its src rather than the model.
+      model.removeListener(ds.pipeline()[0]); 
     }
 
     return ds;    
@@ -4825,6 +4826,8 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
     this._map   = {};
     this._items = [];
 
+    this._revises = false;  // Should scenegraph items track _prev?
+
     mark.def = def;
     mark.marktype = def.type;
     mark.interactive = !(def.interactive === false);
@@ -4851,6 +4854,19 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
     this.dependency(C.SCALES, this._encoder.dependency(C.SCALES));
     this.dependency(C.SIGNALS, this._encoder.dependency(C.SIGNALS));
 
+    return this;
+  };
+
+  proto.revises = function(p) {
+    if(!arguments.length) return this._revises;
+
+    // If we've not needed prev in the past, but a new inline ds needs it now
+    // ensure existing items have prev set.
+    if(!this._revises && p) {
+      this._items.forEach(function(d) { if(d._prev === undefined) d._prev = C.SENTINEL; });
+    }
+
+    this._revises = this._revises || p;
     return this;
   };
 
@@ -4886,10 +4902,11 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
   // because they need their group's data-joined context. 
   function inlineDs() {
     var from = this._def.from,
+        geom = from.mark,
         name, spec, sibling, output;
 
-    if(from.mark) {
-      name = ["vg", this._parent_id, from.mark].join("_");
+    if(geom) {
+      name = ["vg", this._parent_id, geom].join("_");
       spec = {
         name: name,
         transform: from.transform, 
@@ -4907,9 +4924,10 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
 
     this._from = name;
     this._ds = parseData.datasource(this._model, spec);
+    var revises = this._ds.revises();
 
-    if(from.mark) {
-      sibling = this.sibling(from.mark);
+    if(geom) {
+      sibling = this.sibling(geom).revises(revises);
       if(sibling._isSuper) sibling.addListener(this._ds.listener());
       else sibling._bounder.addListener(this._ds.listener());
     } else {
@@ -4918,7 +4936,7 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
       // So, we repulse just this datasource. This should be safe
       // as the ds isn't connected to the scenegraph yet.
       
-      var output = this._ds.source().last();
+      var output = this._ds.source().revises(revises).last();
           input  = changeset.create(output);
 
       input.add = output.add;
@@ -4963,13 +4981,13 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
   };
 
   function newItem(d, stamp) {
-    var item   = tuple.ingest(new Item(this._mark));
-    item.datum = d;
+    var prev = this._revises ? null : undefined,
+        item = tuple.ingest(new Item(this._mark), prev);
 
+    item.datum = d;
     // For the root node's item
     if(this._def.width)  tuple.set(item, "width",  this._def.width);
     if(this._def.height) tuple.set(item, "height", this._def.height);
-
     return item;
   };
 
@@ -5358,8 +5376,9 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
 
   return Scale;
 });
-define('parse/properties',['require','exports','module','../dataflow/tuple','../util/index','../util/config'],function(require, exports, module) {
-  var tuple = require('../dataflow/tuple'),
+define('parse/properties',['require','exports','module','d3','../dataflow/tuple','../util/index','../util/config'],function(require, exports, module) {
+  var d3 = require('d3'),
+      tuple = require('../dataflow/tuple'),
       util = require('../util/index'),
       config = require('../util/config');
 
@@ -5428,8 +5447,9 @@ define('parse/properties',['require','exports','module','../dataflow/tuple','../
     try {
       var encoder = Function("item", "group", "trans", "db", 
         "signals", "predicates", code);
-      encoder.tpl = tuple;
+      encoder.tpl  = tuple;
       encoder.util = util;
+      encoder.d3   = d3; // For color spaces
       return {
         encode: encoder,
         signals: util.keys(deps.signals),
@@ -5589,8 +5609,19 @@ define('parse/properties',['require','exports','module','../dataflow/tuple','../
   function colorRef(type, x, y, z) {
     var xx = x ? valueRef("", x) : config.color[type][0],
         yy = y ? valueRef("", y) : config.color[type][1],
-        zz = z ? valueRef("", z) : config.color[type][2];
-    return "(this.d3." + type + "(" + [xx,yy,zz].join(",") + ') + "")';
+        zz = z ? valueRef("", z) : config.color[type][2]
+        signals = [], scales = [];
+
+    [xx, yy, zz].forEach(function(v) {
+      if(v.signals) signals.push.apply(signals, v.signals);
+      if(v.scales)  scales.push(v.scales);
+    });
+
+    return {
+      val: "(this.d3." + type + "(" + [xx.val, yy.val, zz.val].join(",") + ') + "")',
+      signals: signals,
+      scales: scales
+    };
   }
 
   return compile;
@@ -6482,7 +6513,7 @@ define('core/Model',['require','exports','module','../dataflow/Graph','../datafl
   proto.data = function() {
     var data = this.graph.data.apply(this.graph, arguments);
     if(arguments.length > 1) {  // new Datasource
-      this._node.addListener(data._pipeline[0]);
+      this._node.addListener(data.pipeline()[0]);
     }
 
     return data;
@@ -10310,7 +10341,7 @@ define('parse/interactors',['require','exports','module','../util/load','../util
           var def = util.isObject(data) ? data : JSON.parse(data);
           interactor(i.name, def);
         }
-        if(--count == 0) inject();
+        if(--count == 0) setTimeout(inject, 1);
       }
     }
 
@@ -10457,10 +10488,10 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
         padding: parsePadding(spec.padding),
         signals: parseSignals(model, spec.signals),
         predicates: parsePredicates(model, spec.predicates),
-        marks: parseMarks(model, spec, width, height)
+        marks: parseMarks(model, spec, width, height),
+        data: parseData(model, spec.data, function() { callback(viewFactory(model)); })
       });
 
-      parseData(model, spec.data, function() { callback(viewFactory(model)); });
     });
   }
 });

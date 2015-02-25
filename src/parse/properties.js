@@ -1,5 +1,6 @@
 define(function(require, exports, module) {
-  var tuple = require('../dataflow/tuple'),
+  var d3 = require('d3'),
+      tuple = require('../dataflow/tuple'),
       util = require('../util/index'),
       config = require('../util/config');
 
@@ -68,8 +69,9 @@ define(function(require, exports, module) {
     try {
       var encoder = Function("item", "group", "trans", "db", 
         "signals", "predicates", code);
-      encoder.tpl = tuple;
+      encoder.tpl  = tuple;
       encoder.util = util;
+      encoder.d3   = d3; // For color spaces
       return {
         encode: encoder,
         signals: util.keys(deps.signals),
@@ -229,8 +231,19 @@ define(function(require, exports, module) {
   function colorRef(type, x, y, z) {
     var xx = x ? valueRef("", x) : config.color[type][0],
         yy = y ? valueRef("", y) : config.color[type][1],
-        zz = z ? valueRef("", z) : config.color[type][2];
-    return "(this.d3." + type + "(" + [xx,yy,zz].join(",") + ') + "")';
+        zz = z ? valueRef("", z) : config.color[type][2]
+        signals = [], scales = [];
+
+    [xx, yy, zz].forEach(function(v) {
+      if(v.signals) signals.push.apply(signals, v.signals);
+      if(v.scales)  scales.push(v.scales);
+    });
+
+    return {
+      val: "(this.d3." + type + "(" + [xx.val, yy.val, zz.val].join(",") + ') + "")',
+      signals: signals,
+      scales: scales
+    };
   }
 
   return compile;
