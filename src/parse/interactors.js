@@ -15,7 +15,7 @@ define(function(require, exports, module) {
           var def = util.isObject(data) ? data : JSON.parse(data);
           interactor(i.name, def);
         }
-        if(--count == 0) setTimeout(inject, 1);
+        if(--count == 0) inject();
       }
     }
 
