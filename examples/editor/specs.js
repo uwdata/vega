@@ -1,25 +1,20 @@
-var SPECS = [
-  "arc",
+var STATIC_SPECS = [
   "area",
   "bar",
   "barley",
-  "choropleth",
-  "grouped_bar",
   "error",
-  "force",
-  "image",
-  "jobs",
+  "grouped_bar",
   "lifelines",
-  "map",
-  "napoleon",
   "parallel_coords",
-  "population",
-  "scatter",
-  "scatter_matrix",
-  "stacked_area",
-  "stacked_bar",
   "stocks",
-  "treemap",
-  "weather",
-  "wordcloud"
+  "weather"
+];
+
+var INTERACTIVE_SPECS = [
+  "shiftclick_select",
+  "brush",
+  "brush_interactor",
+  "panzoom_points",
+  "overview+detail",
+  "handles"
 ];

@@ -1,29 +1,36 @@
-vg.parse.spec = function(spec, callback, viewFactory) {
-  
-  viewFactory = viewFactory || vg.ViewFactory;
-  
-  function parse(spec) {
+define(function(require, exports, module) {
+  var Model = require('../core/Model'), 
+      View = require('../core/View'), 
+      parsePadding = require('../parse/padding'),
+      parseMarks = require('../parse/marks'),
+      parseSignals = require('../parse/signals'),
+      parsePredicates = require('../parse/predicates'),
+      parseData = require('../parse/data'),
+      parseInteractors = require('../parse/interactors'),
+      util = require('../util/index');
+
+  return function parseSpec(spec, callback, viewFactory) {
     // protect against subsequent spec modification
-    spec = vg.duplicate(spec);
-    
+    spec = util.duplicate(spec);
+
+    viewFactory = viewFactory || View.factory;
+
     var width = spec.width || 500,
         height = spec.height || 500,
-        viewport = spec.viewport || null;
-    
-    var defs = {
-      width: width,
-      height: height,
-      viewport: viewport,
-      padding: vg.parse.padding(spec.padding),
-      marks: vg.parse.marks(spec, width, height),
-      data: vg.parse.data(spec.data, function() { callback(viewConstructor); })
-    };
-    
-    var viewConstructor = viewFactory(defs);
-  }
-  
-  vg.isObject(spec) ? parse(spec) :
-    d3.json(spec, function(error, json) {
-      error ? vg.error(error) : parse(json);
+        viewport = spec.viewport || null,
+        model = new Model();
+
+    parseInteractors(model, spec, function() {
+      model.defs({
+        width: width,
+        height: height,
+        viewport: viewport,
+        padding: parsePadding(spec.padding),
+        signals: parseSignals(model, spec.signals),
+        predicates: parsePredicates(model, spec.predicates),
+        marks: parseMarks(model, spec, width, height),
+        data: parseData(model, spec.data, function() { callback(viewFactory(model)); })
+      });
     });
-};
+  }
+});

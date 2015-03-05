@@ -1,27 +1,51 @@
-vg.View = (function() {
-  var view = function(el, width, height) {
-    this._el = null;
-    this._build = false;
-    this._model = new vg.Model();
+define(function(require, exports, module) {
+  var d3 = require('d3'),
+      Node = require('../dataflow/Node'),
+      parseStreams = require('../parse/streams'),
+      canvas = require('../render/canvas/index'),
+      svg = require('../render/svg/index'),
+      Transition = require('../scene/Transition'),
+      config = require('../util/config'),
+      util = require('../util/index'),
+      changeset = require('../dataflow/changeset');
+
+  var View = function(el, width, height, model) {
+    this._el    = null;
+    this._model = null;
     this._width = this.__width = width || 500;
-    this._height = this.__height = height || 500;
+    this._height = this.__height = height || 300;
     this._autopad = 1;
     this._padding = {top:0, left:0, bottom:0, right:0};
     this._viewport = null;
     this._renderer = null;
     this._handler = null;
-    this._io = vg.canvas;
+    this._io = canvas;
     if (el) this.initialize(el);
   };
-  
-  var prototype = view.prototype;
-  
+
+  var prototype = View.prototype;
+
+  prototype.model = function(model) {
+    if (!arguments.length) return this._model;
+    if (this._model !== model) {
+      this._model = model;
+      if (this._handler) this._handler.model(model);
+    }
+    return this;
+  };
+
+  prototype.data = function(data) {
+    var m = this.model();
+    if (!arguments.length) return m.data();
+    util.keys(data).forEach(function(d) { m.data(d).add(util.duplicate(data[d])); });
+    return this;
+  };
+
   prototype.width = function(width) {
     if (!arguments.length) return this.__width;
     if (this.__width !== width) {
       this._width = this.__width = width;
       if (this._el) this.initialize(this._el.parentNode);
-      this._model.width(width);
       if (this._strict) this._autopad = 1;
     }
     return this;
@@ -32,7 +56,6 @@ vg.View = (function() {
     if (this.__height !== height) {
       this._height = this.__height = height;
       if (this._el) this.initialize(this._el.parentNode);
-      this._model.height(this._height);
       if (this._strict) this._autopad = 1;
     }
     return this;
@@ -41,7 +64,7 @@ vg.View = (function() {
   prototype.padding = function(pad) {
     if (!arguments.length) return this._padding;
     if (this._padding !== pad) {
-      if (vg.isString(pad)) {
+      if (util.isString(pad)) {
         this._autopad = 1;
         this._padding = {top:0, left:0, bottom:0, right:0};
         this._strict = (pad === "strict");
@@ -64,7 +87,7 @@ vg.View = (function() {
 
     var pad = this._padding,
         b = this.model().scene().bounds,
-        inset = vg.config.autopadInset,
+        inset = config.autopadInset,
         l = b.x1 < 0 ? Math.ceil(-b.x1) + inset : 0,
         t = b.y1 < 0 ? Math.ceil(-b.y1) + inset : 0,
         r = b.x2 > this._width  ? Math.ceil(+b.x2 - this._width) + inset : 0,
@@ -79,7 +102,7 @@ vg.View = (function() {
       this._model.width(this._width);
       this._model.height(this._height);
       if (this._el) this.initialize(this._el.parentNode);
-      this.update({props:"enter"}).update({props:"update"});
+      this.update();
     } else {
       this.padding(pad).update(opt);
     }
@@ -94,11 +117,11 @@ vg.View = (function() {
     }
     return this;
   };
-  
+
   prototype.renderer = function(type) {
     if (!arguments.length) return this._io;
-    if (type === "canvas") type = vg.canvas;
-    if (type === "svg") type = vg.svg;
+    if (type === "canvas") type = canvas;
+    if (type === "svg") type = svg;
     if (this._io !== type) {
       this._io = type;
       this._renderer = null;
@@ -107,32 +130,7 @@ vg.View = (function() {
     }
     return this;
   };
-
-  prototype.defs = function(defs) {
-    if (!arguments.length) return this._model.defs();
-    this._model.defs(defs);
-    return this;
-  };
-
-  prototype.data = function(data) {
-    if (!arguments.length) return this._model.data();
-    var ingest = vg.keys(data).reduce(function(d, k) {
-      return (d[k] = vg.data.ingestAll(data[k]), d);
-    }, {});
-    this._model.data(ingest);
-    this._build = false;
-    return this;
-  };
-
-  prototype.model = function(model) {
-    if (!arguments.length) return this._model;
-    if (this._model !== model) {
-      this._model = model;
-      if (this._handler) this._handler.model(model);
-    }
-    return this;
-  };
-
+  
   prototype.initialize = function(el) {
     var v = this, prevHandler,
         w = v._width, h = v._height, pad = v._padding;
@@ -167,16 +165,63 @@ vg.View = (function() {
       prevHandler.handlers().forEach(function(h) {
         v._handler.on(h.type, h.handler);
       });
+    } else {
+      // Register event listeners for signal stream definitions.
+      parseStreams(this);
     }
     
     return this;
   };
-  
-  prototype.render = function(items) {
-    this._renderer.render(this._model.scene(), items);
-    return this;
+
+  prototype.update = function(opt) {    
+    opt = opt || {};
+    var v = this,
+        trans = opt.duration
+          ? new Transition(opt.duration, opt.ease)
+          : null;
+
+    // TODO: with streaming data API, adds should util.duplicate just parseSpec
+    // to prevent Vega from polluting the environment.
+
+    var cs = changeset.create();
+    if(trans) cs.trans = trans;
+    if(opt.reflow !== undefined) cs.reflow = opt.reflow
+
+    if(!v._build) {
+      v._renderNode = new Node(v._model.graph)
+        .router(true);
+
+      v._renderNode.evaluate = function(input) {
+        util.debug(input, ["rendering"]);
+
+        var s = v._model.scene();
+        if(input.trans) {
+          input.trans.start(function(items) { v._renderer.render(s, items); });
+        } else {
+          v._renderer.render(s);
+        }
+
+        // For all updated datasources, finalize their changesets.
+        var d, ds;
+        for(d in input.data) {
+          ds = v._model.data(d);
+          if(!ds.revises()) continue;
+          changeset.finalize(ds.last());
+        }
+
+        return input;
+      };
+
+      v._model.scene(v._renderNode);
+      v._build = true;
+    }
+
+    // Pulse the entire model (Datasources + scene).
+    v._model.fire(cs);
+
+    return v.autopad(opt);
   };
-  
+
   prototype.on = function() {
     this._handler.on.apply(this._handler, arguments);
     return this;
@@ -186,61 +231,24 @@ vg.View = (function() {
     this._handler.off.apply(this._handler, arguments);
     return this;
   };
-  
-  prototype.update = function(opt) {    
-    opt = opt || {};
-    var view = this,
-        trans = opt.duration
-          ? vg.scene.transition(opt.duration, opt.ease)
-          : null;
 
-    view._build = view._build || (view._model.build(), true);
-    view._model.encode(trans, opt.props, opt.items);
+  View.factory = function(model) {
+    return function(opt) {
+      opt = opt || {};
+      var defs = model.defs();
+      var v = new View()
+        .model(model)
+        .width(defs.width)
+        .height(defs.height)
+        .padding(defs.padding)
+        .renderer(opt.renderer || "canvas");
+
+      if (opt.el) v.initialize(opt.el);
+      if (opt.data) v.data(opt.data);
     
-    if (trans) {
-      trans.start(function(items) {
-        view._renderer.render(view._model.scene(), items);
-      });
-    }
-    else view.render(opt.items);
-
-    return view.autopad(opt);
+      return v;
+    };    
   };
-      
-  return view;
-})();
 
-// view constructor factory
-// takes definitions from parsed specification as input
-// returns a view constructor
-vg.ViewFactory = function(defs) {
-  return function(opt) {
-    opt = opt || {};
-    var v = new vg.View()
-      .width(defs.width)
-      .height(defs.height)
-      .padding(defs.padding)
-      .viewport(defs.viewport)
-      .renderer(opt.renderer || "canvas")
-      .defs(defs);
-
-    if (defs.data.load) v.data(defs.data.load);
-    if (opt.data) v.data(opt.data);
-    if (opt.el) v.initialize(opt.el);
-
-    if (opt.hover !== false) {
-      v.on("mouseover", function(evt, item) {
-        if (item.hasPropertySet("hover")) {
-          this.update({props:"hover", items:item});
-        }
-      })
-      .on("mouseout", function(evt, item) {
-        if (item.hasPropertySet("hover")) {
-          this.update({props:"update", items:item});
-        }
-      });
-    }
-  
-    return v;
-  };
-};
+  return View;
+})

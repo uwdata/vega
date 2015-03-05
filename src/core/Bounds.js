@@ -1,4 +1,4 @@
-vg.Bounds = (function() {
+define(function(require, module, exports) {
   var bounds = function(b) {
     this.clear();
     if (b) this.union(b);
@@ -113,4 +113,4 @@ vg.Bounds = (function() {
   };
 
   return bounds;
-})();
+});

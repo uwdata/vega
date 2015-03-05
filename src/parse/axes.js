@@ -1,4 +1,8 @@
-vg.parse.axes = (function() {
+define(function(require, module, exports) {
+  var axs = require('../scene/axis'),
+      config = require('../util/config'),
+      util = require('../util/index');
+
   var ORIENT = {
     "x":      "bottom",
     "y":      "left",
@@ -8,17 +12,17 @@ vg.parse.axes = (function() {
     "right":  "right"
   };
 
-  function axes(spec, axes, scales) {
+  function axes(model, spec, axes, group) {
     (spec || []).forEach(function(def, index) {
-      axes[index] = axes[index] || vg.scene.axis();
-      axis(def, index, axes[index], scales);
+      axes[index] = axes[index] || axs(model);
+      axis(def, index, axes[index], group);
     });
   };
 
-  function axis(def, index, axis, scales) {
+  function axis(def, index, axis, group) {
     // axis scale
     if (def.scale !== undefined) {
-      axis.scale(scales[def.scale]);
+      axis.scale(group.scale(def.scale));
     }
 
     // axis orientation
@@ -33,7 +37,7 @@ vg.parse.axes = (function() {
     axis.title(def.title || null);
     // axis title offset
     axis.titleOffset(def.titleOffset != null
-      ? def.titleOffset : vg.config.axis.titleOffset);
+      ? def.titleOffset : config.axis.titleOffset);
     // axis values
     axis.tickValues(def.values || null);
     // axis label formatting
@@ -41,14 +45,14 @@ vg.parse.axes = (function() {
     // axis tick subdivision
     axis.tickSubdivide(def.subdivide || 0);
     // axis tick padding
-    axis.tickPadding(def.tickPadding || vg.config.axis.padding);
+    axis.tickPadding(def.tickPadding || config.axis.padding);
 
     // axis tick size(s)
     var size = [];
     if (def.tickSize !== undefined) {
       for (var i=0; i<3; ++i) size.push(def.tickSize);
     } else {
-      var ts = vg.config.axis.tickSize;
+      var ts = config.axis.tickSize;
       size = [ts, ts, ts];
     }
     if (def.tickSizeMajor != null) size[0] = def.tickSizeMajor;
@@ -60,19 +64,19 @@ vg.parse.axes = (function() {
 
     // tick arguments
     if (def.ticks != null) {
-      var ticks = vg.isArray(def.ticks) ? def.ticks : [def.ticks];
+      var ticks = util.isArray(def.ticks) ? def.ticks : [def.ticks];
       axis.ticks.apply(axis, ticks);
     } else {
-      axis.ticks(vg.config.axis.ticks);
+      axis.ticks(config.axis.ticks);
     }
 
     // style properties
     var p = def.properties;
     if (p && p.ticks) {
       axis.majorTickProperties(p.majorTicks
-        ? vg.extend({}, p.ticks, p.majorTicks) : p.ticks);
+        ? util.extend({}, p.ticks, p.majorTicks) : p.ticks);
       axis.minorTickProperties(p.minorTicks
-        ? vg.extend({}, p.ticks, p.minorTicks) : p.ticks);
+        ? util.extend({}, p.ticks, p.minorTicks) : p.ticks);
     } else {
       axis.majorTickProperties(p && p.majorTicks || {});
       axis.minorTickProperties(p && p.minorTicks || {});
@@ -84,4 +88,4 @@ vg.parse.axes = (function() {
   }
 
   return axes;
-})();
+});

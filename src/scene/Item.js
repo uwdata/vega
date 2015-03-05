@@ -1,4 +1,4 @@
-vg.scene.Item = (function() {
+define(function(require, module, exports) {
   function item(mark) {
     this.mark = mark;
   }
@@ -42,8 +42,4 @@ vg.scene.Item = (function() {
   };
   
   return item;
-})();
-
-vg.scene.item = function(mark) {
-  return new vg.scene.Item(mark);
-};
+});
