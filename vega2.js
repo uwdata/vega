@@ -5640,7 +5640,7 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
         val = scale + (ref.band ? ".rangeBand()" : 
           "("+(val !== null ? val : "item.datum.data")+")");
       } else {
-        val = scale;
+		val = scale + "(item.datum.data)";
       }
     }
     
@@ -5670,6 +5670,7 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
 
   return compile;
 });
+
 define('parse/mark',['require','exports','module','../util/index','./properties'],function(require, exports, module) {
   var util = require('../util/index'),
       parseProperties = require('./properties');

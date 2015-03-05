@@ -218,7 +218,7 @@ define(function(require, exports, module) {
         val = scale + (ref.band ? ".rangeBand()" : 
           "("+(val !== null ? val : "item.datum.data")+")");
       } else {
-        val = scale;
+		val = scale + "(item.datum.data)";
       }
     }
     
