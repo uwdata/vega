@@ -8,6 +8,7 @@ define(function(require, exports, module) {
     sort:       require('./Sort'),
     stats:      require('./Stats'),
     unique:     require('./Unique'),
-    zip:        require('./Zip')
+    zip:        require('./Zip'),
+    pie:        require('./Pie')
   };
 });
