@@ -9,7 +9,13 @@
     //module value for 'main' here and return it as the
     //value to use for the public API for the built file.
     return {
+      core: {
+        View: require('core/View')
+      },
       dataflow: {
+        changeset: require('dataflow/changeset'),
+        Datasource: require('dataflow/Datasource'),
+        Graph: require('dataflow/Graph'),
         Node: require('dataflow/Node')
       },
       parse: {

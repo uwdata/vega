@@ -11,6 +11,7 @@
     "ascii-tree": "0.1.x",
     "canvas": "^1.2.x",
     "chai": "^1.10.0",
+    "chromedriver": "^2.14.1",
     "grunt": "0.4.x",
     "grunt-contrib-jshint": "^0.10.0",
     "grunt-contrib-requirejs": "^0.4.4",
@@ -18,6 +19,7 @@
     "grunt-contrib-watch": "^0.6.1",
     "grunt-mocha-test": "^0.12.6",
     "heap": "^0.2.6",
+    "memwatch": "^0.2.2",
     "mocha": "^2.1.0",
     "jsdom": "^3.1.2",
     "cssstyle": "0.2.21",
@@ -26,7 +28,10 @@
     "requirejs": "2.1.x",
     "xmldom": "^0.1.19",
     "xpath": "^0.0.9",
-    "yargs": "^3.2.1"
+    "yargs": "^3.2.1",
+    "selenium-server-standalone-jar": "^2.45.0",
+    "summary": "^0.3.2",
+    "webdriverio": "^2.4.5"
   },
   "scripts": {
     "test": "grunt test"

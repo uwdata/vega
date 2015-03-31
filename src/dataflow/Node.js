@@ -7,6 +7,7 @@ define(function(require, exports, module) {
 
   function Node(graph) {
     if(graph) this.init(graph);
+    return this;
   }
 
   var proto = Node.prototype;
@@ -86,7 +87,7 @@ define(function(require, exports, module) {
 
   proto.addListener = function(l) {
     if(!(l instanceof Node)) throw "Listener is not a Node";
-    if(this._registered[l._id]) return;
+    if(this._registered[l._id]) return this;
 
     this._listeners.push(l);
     this._registered[l._id] = 1;
@@ -115,7 +116,6 @@ define(function(require, exports, module) {
     return foundSending;
   };
 
-  // http://jsperf.com/empty-javascript-array
   proto.disconnect = function() {
     this._listeners = [];
     this._registered = {};

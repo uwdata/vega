@@ -26,10 +26,12 @@ define(function(require, exports, module) {
     }
 
     function signal(sig, selector, exp, spec) {
-      var n = new Node(graph);
+      var n = new Node(graph),
+          item = spec.item ? graph.signal(spec.item.signal) : null;
       n.evaluate = function(input) {
+        if(!input.signals[selector.signal]) return graph.doNotPropagate;
         var val = expr.eval(graph, exp.fn, null, null, null, null, exp.signals);
-        if(spec.scale) val = scale(spec, val);
+        if(spec.scale) val = scale(spec, val, item ? item.value() : null);
         sig.value(val);
         input.signals[sig.name()] = 1;
         input.reflow = true;
@@ -94,7 +96,7 @@ define(function(require, exports, module) {
 
         if(selector[x].event) event(s[x], selector[x], val, sp);
         else if(selector[x].signal) signal(s[x], selector[x], val, sp);
-        else if(selector[x].stream) mergedStream(s[x], selector[x], val, sp);
+        else if(selector[x].stream) mergedStream(s[x], selector[x].stream, val, sp);
         s[x].addListener(router);
       });
     };

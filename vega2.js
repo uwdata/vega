@@ -1057,8 +1057,12 @@ define('util/config',['require','exports','module','d3'],function(require, modul
 
   return config;
 });
+<<<<<<< HEAD
 
 define('util/index',['require','exports','module','./config'],function(require, module, exports) {
+=======
+define('util/index',['require','exports','module','./config','heap'],function(require, module, exports) {
+>>>>>>> feb984617ab1254841e207216e1d8b7f4511c4d3
   var config = require('./config'),
       util = {};
 
@@ -1121,6 +1125,8 @@ define('util/index',['require','exports','module','./config'],function(require, 
   util.duplicate = function(obj) {
     return JSON.parse(JSON.stringify(obj));
   };
+
+  util.equal = function(a, b) { return JSON.stringify(a) == JSON.stringify(b) };
 
   util.field = function(f) {
     return f.split("\\.")
@@ -1290,13 +1296,18 @@ define('util/index',['require','exports','module','./config'],function(require, 
     if (typeof alert !== "undefined") alert(msg);
   };
 
+  var ts;
   util.debug = function(input, args) {
     if (!config.debug) return;
     var log = Function.prototype.bind.call(console.log, console);
     args.unshift(input.stamp||-1);
+    args.unshift(Date.now() - ts);
     if(input.add) args.push(input.add.length, input.mod.length, input.rem.length, !!input.reflow);
     log.apply(console, args);
+    ts = Date.now();
   };
+
+  util.Heap = require('heap');
 
   return util;
 });
@@ -1353,6 +1364,7 @@ define('dataflow/Node',['require','exports','module','../util/index','../util/co
 
   function Node(graph) {
     if(graph) this.init(graph);
+    return this;
   }
 
   var proto = Node.prototype;
@@ -1432,7 +1444,7 @@ define('dataflow/Node',['require','exports','module','../util/index','../util/co
 
   proto.addListener = function(l) {
     if(!(l instanceof Node)) throw "Listener is not a Node";
-    if(this._registered[l._id]) return;
+    if(this._registered[l._id]) return this;
 
     this._listeners.push(l);
     this._registered[l._id] = 1;
@@ -1461,7 +1473,6 @@ define('dataflow/Node',['require','exports','module','../util/index','../util/co
     return foundSending;
   };
 
-  // http://jsperf.com/empty-javascript-array
   proto.disconnect = function() {
     this._listeners = [];
     this._registered = {};
@@ -1551,6 +1562,11 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
 
   var proto = Datasource.prototype;
 
+  proto.name = function(name) {
+    if(!arguments.length) return this._name;
+    return (this._name = name, this);
+  };
+
   proto.source = function(src) {
     if(!arguments.length) return this._source;
     return (this._source = this._graph.data(src));
@@ -1572,6 +1588,7 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
 
   proto.update = function(where, field, func) {
     var mod = this._input.mod,
+        ids = util.tuple_ids(mod),
         prev = this._revises ? null : undefined; 
 
     this._input.fields[field] = 1;
@@ -1580,7 +1597,10 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
           next = func(x);
       if (prev !== next) {
         tuple.set(x, field, next);
-        if(mod.indexOf(x) < 0) mod.push(x);
+        if(ids[x._id] !== 1) {
+          mod.push(x);
+          ids[x._id] = 1;
+        }
       }
     });
     return this;
@@ -1641,18 +1661,23 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
       util.debug(input, ["input", ds._name]);
 
       var delta = ds._input, 
-          out = changeset.create(input);
+          out = changeset.create(input),
+          rem;
+
+      // Delta might contain fields updated through API
+      util.keys(delta.fields).forEach(function(f) { out.fields[f] = 1 });
 
       if(input.reflow) {
         out.mod = ds._data.slice();
       } else {
         // update data
-        var delta = ds._input;
-        var ids = util.tuple_ids(delta.rem);
+        if(delta.rem.length) {
+          rem = util.tuple_ids(delta.rem);
+          ds._data = ds._data
+            .filter(function(x) { return rem[x._id] !== 1 });
+        }
 
-        ds._data = ds._data
-          .filter(function(x) { return ids[x._id] !== 1; })
-          .concat(delta.add);
+        if(delta.add.length) ds._data = ds._data.concat(delta.add);
 
         // reset change list
         ds._input = changeset.create();
@@ -1696,21 +1721,22 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
   };
 
   proto.listener = function() { 
-    var l = new Node(this._graph),
+    var l = new Node(this._graph).router(true),
         dest = this,
         prev = this._revises ? null : undefined;
 
     l.evaluate = function(input) {
-      this._cache = this._cache || {};  // to propagate tuples correctly
-      var output  = changeset.create(input);
+      dest._srcMap = dest._srcMap || {};  // to propagate tuples correctly
+      var map = dest._srcMap,
+          output  = changeset.create(input);
 
       output.add = input.add.map(function(t) {
-        return (l._cache[t._id] = tuple.derive(t, t._prev !== undefined ? t._prev : prev));
+        return (map[t._id] = tuple.derive(t, t._prev !== undefined ? t._prev : prev));
       });
-      output.mod = input.mod.map(function(t) { return l._cache[t._id]; });
+      output.mod = input.mod.map(function(t) { return map[t._id]; });
       output.rem = input.rem.map(function(t) { 
-        var o = l._cache[t._id];
-        l._cache[t._id] = null;
+        var o = map[t._id];
+        map[t._id] = null;
         return o;
       });
 
@@ -1860,7 +1886,7 @@ define('dataflow/Graph',['require','exports','module','heap','./Datasource','./S
         continue;
       }
 
-      p = this.evaluate(n, p);
+      p = this.evaluate(p, n);
 
       // Even if we didn't run the node, we still want to propagate 
       // the pulse. 
@@ -1932,16 +1958,15 @@ define('dataflow/Graph',['require','exports','module','heap','./Datasource','./S
     return branch;
   };
 
-  proto.reevaluate = function(node, pulse) {
-    var reflowed = pulse.reflow && node.last() >= pulse.stamp,
+  proto.reevaluate = function(pulse, node) {
+    var reflowed = !pulse.reflow || (pulse.reflow && node.last() >= pulse.stamp),
         run = !!pulse.add.length || !!pulse.rem.length || node.router();
-
     run = run || !reflowed;
     return run || node.reevaluate(pulse);
   };
 
-  proto.evaluate = function(node, pulse) {
-    if(!this.reevaluate(node, pulse)) return pulse;
+  proto.evaluate = function(pulse, node) {
+    if(!this.reevaluate(pulse, node)) return pulse;
     pulse = node.evaluate(pulse);
     node.last(pulse.stamp);
     return pulse
@@ -1982,29 +2007,28 @@ define('scene/Encoder',['require','exports','module','../dataflow/Node','../util
         enter  = props.enter,
         update = props.update,
         exit   = props.exit,
-        i, item;
+        i, len, item;
 
-    // Only do one traversal of items and use item.status instead
-    // of input.add/mod/rem.
-    for(i=0; i<items.length; ++i) {
-      item = items[i];
+    // Items marked for removal are at the head of items. Process them first.
+    for(i=0, len=input.rem.length; i<len; ++i) {
+      item = input.rem[i];
+      if(update) encode.call(this, update, item, input.trans);
+      if(exit)   encode.call(this, exit,   item, input.trans); 
+      if(input.trans && !exit) input.trans.interpolate(item, EMPTY);
+      else if(!input.trans) item.remove();
+    }
 
-      // enter set
-      if(item.status === C.ENTER) {
-        if(enter) encode.call(this, enter, item, input.trans, input.stamp);
-        item.status = C.UPDATE;
-      }
+    for(i=0, len=input.add.length; i<len; ++i) {
+      item = input.add[i];
+      if(enter)  encode.call(this, enter,  item, input.trans);
+      if(update) encode.call(this, update, item, input.trans);
+      item.status = C.UPDATE;
+    }
 
-      // update set      
-      if (item.status !== C.EXIT && update) {
-        encode.call(this, update, item, input.trans, input.stamp);
-      }
-      
-      // exit set
-      if (item.status === C.EXIT) {
-        if (exit) encode.call(this, exit, item, input.trans, input.stamp); 
-        if (input.trans && !exit) input.trans.interpolate(item, EMPTY);
-        else if (!input.trans) items[i--].remove();
+    if(update) {
+      for(i=0, len=input.mod.length; i<len; ++i) {
+        item = input.mod[i];
+        encode.call(this, update, item, input.trans);
       }
     }
 
@@ -2882,8 +2906,9 @@ define('render/canvas/path',['require','exports','module','d3','../../core/Bound
   };
   
 });
-define('util/bounds',['require','exports','module','../core/Bounds','../render/canvas/path','./index','./config'],function(require, module, exports) {
-  var Bounds = require('../core/Bounds'),
+define('util/bounds',['require','exports','module','d3','../core/Bounds','../render/canvas/path','./index','./config'],function(require, module, exports) {
+  var d3 = require('d3'),
+      Bounds = require('../core/Bounds'),
       canvas = require('../render/canvas/path'),
       util = require('./index'),
       config = require('./config');
@@ -3195,7 +3220,7 @@ define('scene/Bounder',['require','exports','module','../dataflow/Node','../util
 
   function Bounder(model, mark) {
     this._mark = mark;
-    return Node.prototype.init.call(this, model.graph);
+    return Node.prototype.init.call(this, model.graph).router(true);
   }
 
   var proto = (Bounder.prototype = new Node());
@@ -3326,7 +3351,11 @@ define('parse/expr',['require','exports','module','../util/index'],function(requ
         sg[v[0]] = 1;
         tokens[i] = tokens[i].replace(v[0], "sg["+util.str(v[0])+"]");
       }
-      if(v[0] == "d") fd[v.splice(1).join("")] = 1;
+      if(v[0] == "d") {
+        v = v.splice(1);
+        fd[v[0]] = 1;
+        if(v.length > 1) fd[v.join(".")] = 1;
+      }
     }
 
     return {
@@ -3469,16 +3498,21 @@ define('transforms/Transform',['require','exports','module','../dataflow/Node','
     for (var name in params) {
       p = params[name];
       proto[name] = new Parameter(name, p.type);
-      if(p.default) proto[name].set(p.default);
+      if(p.default) proto[name].set(proto, p.default);
     }
+    proto._parameters = params;
   };
 
   var proto = (Transform.prototype = new Node());
-
+ 
   proto.clone = function() {
     var n = Node.prototype.clone.call(this);
     n.transform = this.transform;
-    for(var k in this) { n[k] = this[k]; }
+    n._parameters = this._parameters;
+    for(var k in this) { 
+      if(n[k]) continue;
+      n[k] = this[k]; 
+    }
     return n;
   };
 
@@ -3486,7 +3520,7 @@ define('transforms/Transform',['require','exports','module','../dataflow/Node','
   proto.evaluate = function(input) {
     // Many transforms store caches that must be invalidated if
     // a signal value has changed. 
-    var reset = this.dependency(C.SIGNALS).some(function(s) { 
+    var reset = this._stamp < input.stamp && this.dependency(C.SIGNALS).some(function(s) { 
       return !!input.signals[s] 
     });
 
@@ -3621,6 +3655,124 @@ define('transforms/Bin',['require','exports','module','./Transform','../util/ind
   };
 
   return Bin
+});
+define('transforms/Cross',['require','exports','module','./Transform','../dataflow/Collector','../util/index','../dataflow/tuple','../dataflow/changeset'],function(require, exports, module) {
+  var Transform = require('./Transform'),
+      Collector = require('../dataflow/Collector'),
+      util = require('../util/index'),
+      tuple = require('../dataflow/tuple'),
+      changeset = require('../dataflow/changeset');
+
+  function Cross(graph) {
+    Transform.prototype.init.call(this, graph);
+    Transform.addParameters(this, {
+      with: {type: "data"},
+      diagonal: {type: "value", default: "true"}
+    });
+
+    this._output = {"left": "a", "right": "b"};
+    this._collector = new Collector(graph);
+    this._lastRem  = null; // Most recent stamp that rem occured. 
+    this._lastWith = null; // Last time we crossed w/withds.
+    this._ids   = {};
+    this._cache = {};
+
+    return this.router(true);
+  }
+
+  var proto = (Cross.prototype = new Transform());
+
+  // Each cached incoming tuple also has a stamp to track if we need to do
+  // lazy filtering of removed tuples.
+  function cache(x, t) {
+    var c = this._cache[x._id] = this._cache[x._id] || {c: [], s: this._stamp};
+    c.c.push(t);
+  }
+
+  function add(output, left, wdata, diag, x) {
+    var data = left ? wdata : this._collector.data(), // Left tuples cross w/right.
+        i = 0, len = data.length,
+        prev  = x._prev !== undefined ? null : undefined, 
+        t, y, id;
+
+    for(; i<len; ++i) {
+      y = data[i];
+      id = left ? x._id+"_"+y._id : y._id+"_"+x._id;
+      if(this._ids[id]) continue;
+      if(x._id == y._id && !diag) continue;
+
+      t = tuple.ingest({}, prev);
+      t[this._output.left]  = left ? x : y;
+      t[this._output.right] = left ? y : x;
+      output.add.push(t);
+      cache.call(this, x, t);
+      cache.call(this, y, t);
+      this._ids[id] = 1;
+    }
+  }
+
+  function mod(output, left, x) {
+    var cross = this,
+        c = this._cache[x._id];
+
+    if(this._lastRem > c.s) {  // Removed tuples haven't been filtered yet
+      c.c = c.c.filter(function(y) {
+        var t = y[cross._output[left ? "right" : "left"]];
+        return cross._cache[t._id] !== null;
+      });
+      c.s = this._lastRem;
+    }
+
+    output.mod.push.apply(output.mod, c.c);
+  }
+
+  function rem(output, x) {
+    output.rem.push.apply(output.rem, this._cache[x._id].c);
+    this._cache[x._id] = null;
+    this._lastRem = this._stamp;
+  }
+
+  function upFields(input, output) {
+    if(input.add.length || input.rem.length) {
+      output.fields[this._output.left]  = 1; 
+      output.fields[this._output.right] = 1;
+    }
+  }
+
+  proto.transform = function(input) {
+    util.debug(input, ["crossing"]);
+
+    // Materialize the current datasource. TODO: share collectors
+    this._collector.evaluate(input);
+
+    var w = this.with.get(this._graph),
+        diag = this.diagonal.get(this._graph),
+        selfCross = (!w.name),
+        data = this._collector.data(),
+        woutput = selfCross ? input : w.source.last(),
+        wdata   = selfCross ? data : w.source.values(),
+        output  = changeset.create(input),
+        r = rem.bind(this, output); 
+
+    input.rem.forEach(r);
+    input.add.forEach(add.bind(this, output, true, wdata, diag));
+
+    if(!selfCross && woutput.stamp > this._lastWith) {
+      woutput.rem.forEach(r);
+      woutput.add.forEach(add.bind(this, output, false, data, diag));
+      woutput.mod.forEach(mod.bind(this, output, false));
+      upFields.call(this, woutput, output);
+      this._lastWith = woutput.stamp;
+    }
+
+    // Mods need to come after all removals have been run.
+    input.mod.forEach(mod.bind(this, output, true));
+    upFields.call(this, input, output);
+
+    return output;
+  };
+
+  return Cross;
 });
 define('transforms/Aggregate',['require','exports','module','./Transform','../dataflow/tuple','../dataflow/changeset','../util/index','../util/constants'],function(require, exports, module) {
   var Transform = require('./Transform'),
@@ -3960,7 +4112,7 @@ define('transforms/Fold',['require','exports','module','./Transform','../util/in
     if(reset) rst.call(this, input, output);
 
     fn.call(this, input.add, fields, accessors, output.add, input.stamp);
-    fn.call(this, input.mod, fields, accessors, output.mod, input.stamp);
+    fn.call(this, input.mod, fields, accessors, reset ? output.add : output.mod, input.stamp);
     input.rem.forEach(function(x) {
       output.rem.push.apply(output.rem, fold._cache[x._id]);
       fold._cache[x._id] = null;
@@ -4007,7 +4159,11 @@ define('transforms/Formula',['require','exports','module','./Transform','../data
         field = this.field.get(this._graph);
 
     input.add.forEach(function(x) { f.call(t, x, field, input.stamp) });;
-    input.mod.forEach(function(x) { f.call(t, x, field, input.stamp) });
+    
+    if(this.reevaluate(input)) {
+      input.mod.forEach(function(x) { f.call(t, x, field, input.stamp) });
+    }
+
     input.fields[field] = 1;
     return input;
   };
@@ -4039,12 +4195,24 @@ define('transforms/Sort',['require','exports','module','./Transform','../parse/e
 
   return Sort;
 });
-define('util/quickselect',[],function() {
-  return function quickselect(k, x) {
+define('util/quickselect',['require','exports','module','./index'],function(require, exports, module) {
+  var util = require('./index');
+
+  return function quickselect(k, x, c) {
     function swap(a, b) {
       var t = x[a];
       x[a] = x[b];
       x[b] = t;
+    }
+
+    // x may be null, in which case assemble an array from c (counts)
+    if(x === null) {
+      x = [];
+      util.keys(c).forEach(function(k) {
+        var i = 0, len = c[k];
+        k = +k || k;
+        for(; i<len; ++i) x.push(k);
+      });
     }
     
     var left = 0,
@@ -4065,8 +4233,9 @@ define('util/quickselect',[],function() {
     return x[k];
   };
 });
-define('transforms/measures',['require','exports','module','../dataflow/tuple','../util/quickselect','../util/constants'],function(require, exports, module) {
+define('transforms/measures',['require','exports','module','../dataflow/tuple','../util/index','../util/quickselect','../util/constants'],function(require, exports, module) {
   var tuple = require('../dataflow/tuple'),
+      util = require('../util/index'),
       quickselect = require('../util/quickselect'),
       C = require('../util/constants');
 
@@ -4077,6 +4246,14 @@ define('transforms/measures',['require','exports','module','../dataflow/tuple','
       add:  "this.cnt += 1;",
       rem:  "this.cnt -= 1;",
       set:  "this.cnt"
+    }),
+    "_counts": measure({
+      name: "_counts",
+      init: "this.cnts = {};",
+      add:  "this.cnts[v] = ++this.cnts[v] || 1;",
+      rem:  "this.cnts[v] = --this.cnts[v] < 0 ? 0 : this.cnts[v];",
+      set:  "",
+      req:  ["count"]
     }),
     "sum": measure({
       name: "sum",
@@ -4125,30 +4302,36 @@ define('transforms/measures',['require','exports','module','../dataflow/tuple','
       set:  "Math.sqrt(this.dev / this.cnt)",
       req:  ["var"], idx: 5
     }),
-    "median": measure({
-      name: "median",
-      init: "this.val = [];",
-      add:  "this.val.push(v);",
-      rem:  "this.val[this.val.indexOf(v)] = this.val[this.val.length-1];" +
-            "this.val.length = this.val.length - 1;",
-      set:  "this.sel(~~(this.cnt/2), this.val)",
-      req: ["count"], idx: 6
-    }),
     "min": measure({
       name: "min",
-      init: "",
-      add: "",
-      rem: "",
-      set: "this.sel(0, this.val)",
-      req: ["median"]
+      init: "this.min = +Infinity;",
+      add:  "this.min = v < this.min ? v : this.min;",
+      rem:  "var self = this; this.min = v == this.min " +
+            "? this.keys(this.cnts).reduce(function(m, v) { " +
+            "   return self.cnts[(v = +v)] > 0 && v < m ? v : m }, +Infinity) " + 
+            ": this.min;",
+      set:  "this.min",
+      req: ["_counts"], idx: 6
     }),
     "max": measure({
       name: "max",
-      init: "",
-      add: "",
-      rem: "",
-      set: "this.sel(this.val.length-1, this.val)",
-      req: ["median"]
+      init: "this.max = -Infinity;",
+      add:  "this.max = v > this.max ? v : this.max;",
+      rem:  "var self = this; this.max = v == this.max " +
+            "? this.keys(this.cnts).reduce(function(m, v) { " +
+            "   return self.cnts[(v = +v)] > 0 && v > m ? v : m }, -Infinity) " + 
+            ": this.max;",
+      set:  "this.max",
+      req: ["_counts"], idx: 7
+    }),
+    "median": measure({
+      name: "median",
+      init: "this.vals = []; ",
+      add:  "if(this.vals) this.vals.push(v); ",
+      rem:  "this.vals = null;",
+      set:  "this.cnt % 2 ? this.sel(~~(this.cnt/2), this.vals, this.cnts) : "+
+            "0.5 * (this.sel(~~(this.cnt/2)-1, this.vals, this.cnts) + this.sel(~~(this.cnt/2), this.vals, this.cnts))",
+      req: ["_counts"], idx: 8
     })
   };
 
@@ -4196,6 +4379,7 @@ define('transforms/measures',['require','exports','module','../dataflow/tuple','
     ctr.prototype.rem = Function("v", rem);
     ctr.prototype.set = Function("stamp", set);
     ctr.prototype.mod = mod;
+    ctr.prototype.keys = util.keys;
     ctr.prototype.sel = quickselect;
     ctr.prototype.tuple = tuple;
     return ctr;
@@ -4278,8 +4462,19 @@ define('transforms/Stats',['require','exports','module','./Transform','./Aggrega
   };
 
   proto._new_cell = function(x, k) {
-    var cell = this.__facet || tuple.derive(x, x._prev);
-    return new this._Measures(cell);
+    var group_by = this.group_by.get(this._graph),
+        fields = group_by.fields, acc = group_by.accessors,
+        i, len;
+
+    var t = this.__facet || {};
+    if(!this.__facet) {
+      for(i=0, len=fields.length; i<len; ++i) {
+        t[fields[i]] = acc[i](x);
+      }
+      t = tuple.ingest(t, null);
+    }
+
+    return new this._Measures(t);
   };
 
   proto._add = function(x) {
@@ -4391,21 +4586,23 @@ define('transforms/Zip',['require','exports','module','./Transform','../dataflow
         withKey = this.withKey.get(this._graph),
         as = this.as.get(this._graph),
         dflt = this.default.get(this._graph),
-        map = mp.bind(this);
+        map = mp.bind(this),
+        rem = {};
 
     util.debug(input, ["zipping", w.name]);
 
     if(withKey.field) {
       if(woutput && woutput.stamp > this._lastJoin) {
-        woutput.add.forEach(function(x) { 
-          var m = map(withKey.accessor(x));
-          if(m[0]) m[0][as] = x;
-          m[1] = x; 
-        });
         woutput.rem.forEach(function(x) {
           var m = map(withKey.accessor(x));
-          if(m[0]) m[0][as] = dflt;
+          if(m[0]) m[0].forEach(function(d) { d[as] = dflt });
           m[1] = null;
+        });
+
+        woutput.add.forEach(function(x) { 
+          var m = map(withKey.accessor(x));
+          if(m[0]) m[0].forEach(function(d) { d[as] = x });
+          m[1] = x;
         });
         
         // Only process woutput.mod tuples if the join key has changed.
@@ -4415,36 +4612,46 @@ define('transforms/Zip',['require','exports','module','./Transform','../dataflow
             var prev;
             if(!x._prev || (prev = withKey.accessor(x._prev)) === undefined) return;
             var prevm = map(prev);
-            if(prevm[0]) prevm[0][as] = dflt;
+            if(prevm[0]) prevm[0].forEach(function(d) { d[as] = dflt });
             prevm[1] = null;
 
             var m = map(withKey.accessor(x));
-            if(m[0]) m[0][as] = x;
+            if(m[0]) m[0].forEach(function(d) { d[as] = x });
             m[1] = x;
           });
         }
 
         this._lastJoin = woutput.stamp;
       }
-      
+    
       input.add.forEach(function(x) {
         var m = map(key.accessor(x));
         x[as] = m[1] || dflt;
-        m[0]  = x;
+        (m[0]=m[0]||[]).push(x);
       });
-      input.rem.forEach(function(x) { map(key.accessor(x))[0] = null; });
+
+      input.rem.forEach(function(x) { 
+        var k = key.accessor(x);
+        (rem[k]=rem[k]||{})[x._id] = 1;
+      });
 
       if(input.fields[key.field]) {
         input.mod.forEach(function(x) {
           var prev;
           if(!x._prev || (prev = key.accessor(x._prev)) === undefined) return;
 
-          map(prev)[0] = null;
           var m = map(key.accessor(x));
           x[as] = m[1] || dflt;
-          m[0]  = x;
+          (m[0]=m[0]||[]).push(x);
+          (rem[prev]=rem[prev]||{})[x._id] = 1;
         });
       }
+
+      util.keys(rem).forEach(function(k) { 
+        var m = map(k);
+        if(!m[0]) return;
+        m[0] = m[0].filter(function(x) { return rem[k][x._id] !== 1 });
+      });
     } else {
       // We only need to run a non-key-join again if we've got any add/rem
       // on input or woutput
@@ -4461,14 +4668,16 @@ define('transforms/Zip',['require','exports','module','./Transform','../dataflow
       for(i = 0; i < data.length; i++) { data[i][as] = wdata[i%wlen]; }
     }
 
+    input.fields[as] = 1;
     return input;
   };
 
   return Zip;
 });
-define('transforms/index',['require','exports','module','./Bin','./Facet','./Filter','./Fold','./Formula','./Sort','./Stats','./Unique','./Zip'],function(require, exports, module) {
+define('transforms/index',['require','exports','module','./Bin','./Cross','./Facet','./Filter','./Fold','./Formula','./Sort','./Stats','./Unique','./Zip'],function(require, exports, module) {
   return {
     bin:        require('./Bin'),
+    cross:      require('./Cross'),
     facet:      require('./Facet'),
     filter:     require('./Filter'),
     fold:       require('./Fold'),
@@ -4824,14 +5033,13 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
     this._from  = (def.from ? def.from.data : null) || inheritFrom;
     this._ds    = util.isString(this._from) ? model.data(this._from) : null;
     this._map   = {};
-    this._items = [];
 
     this._revises = false;  // Should scenegraph items track _prev?
 
     mark.def = def;
     mark.marktype = def.type;
     mark.interactive = !(def.interactive === false);
-    mark.items = this._items;
+    mark.items = [];
 
     this._parent = parent;
     this._parent_id = parent_id;
@@ -4868,34 +5076,6 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
 
     this._revises = this._revises || p;
     return this;
-  };
-
-  proto.evaluate = function(input) {
-    util.debug(input, ["building", this._from, this._def.type]);
-
-    var fullUpdate = this._encoder.reevaluate(input),
-        output, fcs, data;
-
-    if(this._ds) {
-      output = changeset.create(input);
-
-      // If a scale or signal in the update propset has been updated, 
-      // send forward all items for reencoding if we do an early return.
-      if(fullUpdate) output.mod = this._items.slice();
-
-      fcs = this._ds.last();
-      if(!fcs) {
-        output.reflow = true
-      } else if(fcs.stamp > this._stamp) {
-        output = joinChangeset.call(this, fcs);
-      }
-    } else {
-      data = util.isFunction(this._def.from) ? this._def.from() : [C.SENTINEL];
-      output = joinValues.call(this, input, data);
-    }
-
-    output = this._graph.evaluate(this._encoder, output);
-    return this._isSuper ? this._graph.evaluate(this._bounder, output) : output;
   };
 
   // Reactive geometry and mark-level transformations are handled here 
@@ -4943,7 +5123,7 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
       input.mod = output.mod;
       input.rem = output.rem;
       input.stamp = null;
-      this._ds.fire(input);
+      this._graph.propagate(input, this._ds.listener());
     }
   }
 
@@ -4969,6 +5149,9 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
 
   proto.disconnect = function() {
     var builder = this;
+    if(!this._listeners.length) return this;
+
+    Node.prototype.disconnect.call(this);
     this._model.graph.disconnect(this.pipeline());
     this._encoder.dependency(C.SCALES).forEach(function(s) {
       builder._parent.scale(s).removeListener(builder);
@@ -4980,64 +5163,100 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
     return this._parent.child(name, this._parent_id);
   };
 
-  function newItem(d, stamp) {
+  proto.evaluate = function(input) {
+    util.debug(input, ["building", this._from, this._def.type]);
+
+    var output, fullUpdate, fcs, data;
+
+    if(this._ds) {
+      output = changeset.create(input);
+
+      // We need to determine if any encoder dependencies have been updated.
+      // However, the encoder's data source will likely be updated, and shouldn't
+      // trigger all items to mod.
+      data = util.duplicate(output.data);
+      delete output.data[this._ds.name()];
+      fullUpdate = this._encoder.reevaluate(output);
+      output.data = data;
+
+      // If a scale or signal in the update propset has been updated, 
+      // send forward all items for reencoding if we do an early return.
+      if(fullUpdate) output.mod = this._mark.items.slice();
+
+      fcs = this._ds.last();
+      if(!fcs) {
+        output.reflow = true
+      } else if(fcs.stamp > this._stamp) {
+        output = joinDatasource.call(this, fcs, this._ds.values(), fullUpdate);
+      }
+    } else {
+      fullUpdate = this._encoder.reevaluate(input);
+      data = util.isFunction(this._def.from) ? this._def.from() : [C.SENTINEL];
+      output = joinValues.call(this, input, data, fullUpdate);
+    }
+
+    output = this._graph.evaluate(output, this._encoder);
+    return this._isSuper ? this._graph.evaluate(output, this._bounder) : output;
+  };
+
+  function newItem() {
     var prev = this._revises ? null : undefined,
         item = tuple.ingest(new Item(this._mark), prev);
 
-    item.datum = d;
     // For the root node's item
     if(this._def.width)  tuple.set(item, "width",  this._def.width);
     if(this._def.height) tuple.set(item, "height", this._def.height);
     return item;
   };
 
-  function joinChangeset(input) {
-    var keyf = keyFunction(this._def.key || "_id"),
-        output = changeset.create(input),
+  function join(data, keyf, next, output, prev, mod) {
+    var i, key, len, item, datum, enter;
+
+    for(i=0, len=data.length; i<len; ++i) {
+      datum = data[i];
+      item  = keyf ? this._map[key = keyf(datum)] : prev[i];
+      enter = item ? false : (item = newItem.call(this), true);
+      item.status = enter ? C.ENTER : C.UPDATE;
+      item.datum = datum;
+      tuple.set(item, "key", key);
+      this._map[key] = item;
+      next.push(item);
+      if(enter) output.add.push(item);
+      else if(!mod || (mod && mod[datum._id])) output.mod.push(item);
+    }
+  }
+
+  function joinDatasource(input, data, fullUpdate) {
+    var output = changeset.create(input),
+        keyf = keyFunction(this._def.key || "_id"),
         add = input.add, 
         mod = input.mod, 
         rem = input.rem,
-        stamp = input.stamp,
-        i, key, len, item, datum;
+        next = [],
+        i, key, len, item, datum, enter;
+
+    // Build rems first, and put them at the head of the next items
+    // Then build the rest of the data values (which won't contain rem).
+    // This will preserve the sort order without needing anything extra.
 
     for(i=0, len=rem.length; i<len; ++i) {
       item = this._map[key = keyf(rem[i])];
       item.status = C.EXIT;
+      next.push(item);
       output.rem.push(item);
       this._map[key] = null;
     }
 
-    for(i=0, len=add.length; i<len; ++i) {
-      key = keyf(datum = add[i]);
-      item = newItem.call(this, datum, stamp);
-      tuple.set(item, "key", key);
-      item.status = C.ENTER;
-      this._map[key] = item;
-      this._items.push(item);
-      output.add.push(item);
-    }
+    join.call(this, data, keyf, next, output, null, util.tuple_ids(fullUpdate ? data : mod));
 
-    for(i=0, len=mod.length; i<len; ++i) {
-      item = this._map[key = keyf(datum = mod[i])];
-      tuple.set(item, "key", key);
-      item.datum  = datum;
-      item.status = C.UPDATE;
-      output.mod.push(item);
-    }
-
-    // Sort items according to how data is sorted, or by _id. The else 
-    // condition is important to ensure lines and areas are drawn correctly.
-    this._items.sort(function(a, b) { 
-      return input.sort ? input.sort(a.datum, b.datum) : (a.datum._id - b.datum._id);
-    });
-
-    return output;
+    return (this._mark.items = next, output);
   }
 
-  function joinValues(input, data) {
-    var keyf = keyFunction(this._def.key),
-        prev = this._items.splice(0),
-        output = changeset.create(input),
+  function joinValues(input, data, fullUpdate) {
+    var output = changeset.create(input),
+        keyf = keyFunction(this._def.key),
+        prev = this._mark.items || [],
+        next = [],
         i, key, len, item, datum, enter;
 
     for (i=0, len=prev.length; i<len; ++i) {
@@ -5046,34 +5265,18 @@ define('scene/Builder',['require','exports','module','../dataflow/Node','./Encod
       if (keyf) this._map[item.key] = item;
     }
     
-    for (i=0, len=data.length; i<len; ++i) {
-      datum = data[i];
-      key = i;
-      item = keyf ? this._map[key = keyf(datum)] : prev[i];
-      if(!item) {
-        this._items.push(item = newItem.call(this, datum, input.stamp));
-        output.add.push(item);
-        tuple.set(item, "key", key);
-        item.status = C.ENTER;
-      } else {
-        this._items.push(item);
-        output.mod.push(item);
-        tuple.set(item, "key", key);
-        item.datum = datum;
-        item.status = C.UPDATE;
-      }
-    }
+    join.call(this, data, keyf, next, output, prev, fullUpdate ? util.tuple_ids(data) : null);
 
     for (i=0, len=prev.length; i<len; ++i) {
       item = prev[i];
       if (item.status === C.EXIT) {
         tuple.set(item, "key", keyf ? item.key : this._items.length);
-        this._items.unshift(item);  // Keep item around for "exit" transition.
-        output.rem.unshift(item);
+        next.splice(0, 0, item);  // Keep item around for "exit" transition.
+        output.rem.push(item);
       }
     }
     
-    return output;
+    return (this._mark.items = next, output);
   };
 
   function keyFunction(key) {
@@ -5102,9 +5305,10 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
   var GROUP_PROPERTY = {width: 1, height: 1};
 
   function Scale(model, def, parent) {
-    this._model = model;
-    this._def = def;
-    this._parent = parent;
+    this._model   = model;
+    this._def     = def;
+    this._parent  = parent;
+    this._updated = false;
     return Node.prototype.init.call(this, model.graph);
   }
 
@@ -5114,12 +5318,14 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
     var self = this,
         fn = function(group) { scale.call(self, group); };
 
+    this._updated = false;
     input.add.forEach(fn);
     input.mod.forEach(fn);
 
     // Scales are at the end of an encoding pipeline, so they should forward a
     // reflow pulse. Thus, if multiple scales update in the parent group, we don't
     // reevaluate child marks multiple times. 
+    if(this._updated) input.scales[this._def.name] = 1;
     return changeset.create(input, true);
   };
 
@@ -5159,12 +5365,14 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
       if (!ctor) util.error("Unrecognized scale type: " + type);
       (scale = ctor()).type = scale.type || type;
       scale.scaleName = this._def.name;
+      scale._prev = {};
     }
     return scale;
   }
 
   function ordinal(scale, rng, group) {
     var def = this._def,
+        prev = scale._prev,
         domain, sort, str, refs, dataDrivenRange = false;
     
     // range pre-processing for data-driven ranges
@@ -5175,9 +5383,15 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
     
     // domain
     domain = dataRef.call(this, C.DOMAIN, def.domain, scale, group);
-    if (domain) scale.domain(domain);
+    if (domain && !util.equal(prev.domain, domain)) {
+      scale.domain(domain);
+      prev.domain = domain;
+      this._updated = true;
+    } 
 
     // range
+    if(util.equal(prev.range, rng)) return;
+
     str = typeof rng[0] === 'string';
     if (str || rng.length > 2 || rng.length===1 || dataDrivenRange) {
       scale.range(rng); // color or shape values
@@ -5188,23 +5402,37 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
     } else {
       scale.rangeBands(rng, def.padding||0);
     }
+
+    prev.range = rng;
+    this._updated = true;
   }
 
   function quantitative(scale, rng, group) {
     var def = this._def,
+        prev = scale._prev,
         domain, interval;
 
     // domain
     domain = (def.type === C.QUANTILE)
       ? dataRef.call(this, C.DOMAIN, def.domain, scale, group)
       : domainMinMax.call(this, scale, group);
-    scale.domain(domain);
+    if (domain && !util.equal(prev.domain, domain)) {
+      scale.domain(domain);
+      prev.domain = domain;
+      this._updated = true;
+    } 
 
     // range
     // vertical scales should flip by default, so use XOR here
     if (def.range === "height") rng = rng.reverse();
+    if(util.equal(prev.range, rng)) return;
     scale[def.round && scale.rangeRound ? "rangeRound" : "range"](rng);
+    prev.range = rng;
+    this._updated = true;
 
+    // TODO: Support signals for these properties. Until then, only eval
+    // them once.
+    if(this._stamp > 0) return;
     if (def.exponent && def.type===C.POWER) scale.exponent(def.exponent);
     if (def.clamp) scale.clamp(true);
     if (def.nice) {
@@ -5232,7 +5460,7 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
     if(!cache) {
       cache = scale[ck] = new Stats(graph), meas = [];
       if(uniques && sort) meas.push(sort.stat);
-      else if(!uniques) meas.push(C.MIN, C.MAX);
+      else if(!uniques)   meas.push(C.MIN, C.MAX);
       cache.measures.set(cache, meas);
     }
 
@@ -5270,18 +5498,20 @@ define('scene/Scale',['require','exports','module','d3','../dataflow/Node','../t
     data = cache.data();
     if(uniques) {
       keys = util.keys(data)
-        .filter(function(k) { return data[k] != null; })
-        .map(function(k) { return { key: k, tpl: data[k].tpl }});
+        .filter(function(k) { return data[k] != null; });
 
       if(sort) {
         sort = sort.order.signal ? graph.signalRef(sort.order.signal) : sort.order;
         sort = (sort == C.DESC ? "-" : "+") + "tpl." + cache.on.get(graph).field;
         sort = util.comparator(sort);
-      } else {  // "First seen" order
-        sort = util.comparator("tpl._id");
+        keys = keys.map(function(k) { return { key: k, tpl: data[k].tpl }})
+          .sort(sort)
+          .map(function(k) { return k.key });
+      // } else {  // "First seen" order
+      //   sort = util.comparator("tpl._id");
       }
 
-      return keys.sort(sort).map(function(k) { return k.key });
+      return keys;
     } else {
       data = data[""]; // Unpack flat aggregation
       return data == null ? [] : [data.tpl.min, data.tpl.max];
@@ -5490,13 +5720,13 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
       util.keys(r.input).forEach(function(k) {
         var ref = valueRef(i, r.input[k]);
         input.push(util.str(k)+": "+ref.val);
-        signals.concat(ref.signals);
-        scales.concat(ref.scales);
+        if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
+        if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
       });
 
       ref = valueRef(name, r);
-      signals.concat(ref.signals);
-      scales.concat(ref.scales);
+      if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
+      if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
 
       if(pred && predName) {
         signals.push.apply(signals, pred.signals);
@@ -5562,13 +5792,13 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
         if (ref.group != null) { val = "this.util.accessor("+val+")("+grp+")"; }
       } else if(ref.field.signal) {
         signalRef = util.field(ref.field.signal);
-        val = "signals["+signalRef.map(util.str).join("][")+"]";
+        val = "item.datum[signals["+signalRef.map(util.str).join("][")+"]]";
         if (ref.group != null) { val = "this.util.accessor("+val+")("+grp+")"; }
         signals.push(signalRef.shift());
       } else {
         val = "this.util.accessor(group.datum["
             + util.field(ref.field.group).map(util.str).join("][")
-            + "])(item.datum.data)";
+            + "])(item.datum)";
       }
     } else if (ref.group != null) {
       val = grp;
@@ -6571,1072 +6801,997 @@ define('core/Model',['require','exports','module','../dataflow/Graph','../datafl
 
   return Model;
 });
+<<<<<<< HEAD
 
 define('parse/events',[],function() {
+=======
+define('parse/events',[],function(){
+>>>>>>> feb984617ab1254841e207216e1d8b7f4511c4d3
   /*
-   * Generated by PEG.js 0.8.0.
+   * Generated by PEG.js 0.7.0.
    *
    * http://pegjs.majda.cz/
    */
 
-  function peg$subclass(child, parent) {
-    function ctor() { this.constructor = child; }
-    ctor.prototype = parent.prototype;
-    child.prototype = new ctor();
+  function quote(s) {
+    /*
+     * ECMA-262, 5th ed., 7.8.4: All characters may appear literally in a
+     * string literal except for the closing quote character, backslash,
+     * carriage return, line separator, paragraph separator, and line feed.
+     * Any character may appear in the form of an escape sequence.
+     *
+     * For portability, we also escape escape all control and non-ASCII
+     * characters. Note that "\0" and "\v" escape sequences are not used
+     * because JSHint does not like the first and IE the second.
+     */
+     return '"' + s
+      .replace(/\\/g, '\\\\')  // backslash
+      .replace(/"/g, '\\"')    // closing quote character
+      .replace(/\x08/g, '\\b') // backspace
+      .replace(/\t/g, '\\t')   // horizontal tab
+      .replace(/\n/g, '\\n')   // line feed
+      .replace(/\f/g, '\\f')   // form feed
+      .replace(/\r/g, '\\r')   // carriage return
+      .replace(/[\x00-\x07\x0B\x0E-\x1F\x80-\uFFFF]/g, escape)
+      + '"';
   }
 
-  function SyntaxError(message, expected, found, offset, line, column) {
-    this.message  = message;
-    this.expected = expected;
-    this.found    = found;
-    this.offset   = offset;
-    this.line     = line;
-    this.column   = column;
+  var result = {
+    /*
+     * Parses the input with a generated parser. If the parsing is successfull,
+     * returns a value explicitly or implicitly specified by the grammar from
+     * which the parser was generated (see |PEG.buildParser|). If the parsing is
+     * unsuccessful, throws |PEG.parser.SyntaxError| describing the error.
+     */
+    parse: function(input, startRule) {
+      var parseFunctions = {
+        "merged": parse_merged,
+        "ordered": parse_ordered,
+        "filtered": parse_filtered,
+        "stream": parse_stream,
+        "class": parse_class,
+        "id": parse_id,
+        "eventType": parse_eventType,
+        "filter": parse_filter,
+        "value": parse_value,
+        "sep": parse_sep
+      };
 
-    this.name     = "SyntaxError";
-  }
-
-  peg$subclass(SyntaxError, Error);
-
-  function parse(input) {
-    var options = arguments.length > 1 ? arguments[1] : {},
-
-        peg$FAILED = {},
-
-        peg$startRuleFunctions = { start: peg$parsestart },
-        peg$startRuleFunction  = peg$parsestart,
-
-        peg$c0 = peg$FAILED,
-        peg$c1 = ",",
-        peg$c2 = { type: "literal", value: ",", description: "\",\"" },
-        peg$c3 = function(o, m) { return [o].concat(m) },
-        peg$c4 = function(o) { return [o] },
-        peg$c5 = "[",
-        peg$c6 = { type: "literal", value: "[", description: "\"[\"" },
-        peg$c7 = "]",
-        peg$c8 = { type: "literal", value: "]", description: "\"]\"" },
-        peg$c9 = ">",
-        peg$c10 = { type: "literal", value: ">", description: "\">\"" },
-        peg$c11 = function(f1, f2, o) { return {start: f1, end: f2, middle: o}},
-        peg$c12 = [],
-        peg$c13 = function(s, f) { return (s.filters = f), s },
-        peg$c14 = function(s) { return s },
-        peg$c15 = null,
-        peg$c16 = function(t, e) { return { event: e, target: t } },
-        peg$c17 = /^[:a-zA-z0-9_\-]/,
-        peg$c18 = { type: "class", value: "[:a-zA-z0-9_\\-]", description: "[:a-zA-z0-9_\\-]" },
-        peg$c19 = function(s) { return { signal: s.join("") }},
-        peg$c20 = "(",
-        peg$c21 = { type: "literal", value: "(", description: "\"(\"" },
-        peg$c22 = ")",
-        peg$c23 = { type: "literal", value: ")", description: "\")\"" },
-        peg$c24 = function(m) { return { stream: m }},
-        peg$c25 = ".",
-        peg$c26 = { type: "literal", value: ".", description: "\".\"" },
-        peg$c27 = ":",
-        peg$c28 = { type: "literal", value: ":", description: "\":\"" },
-        peg$c29 = function(c) { return { type:'class', value: c } },
-        peg$c30 = "#",
-        peg$c31 = { type: "literal", value: "#", description: "\"#\"" },
-        peg$c32 = function(id) { return { type:'id', value: id } },
-        peg$c33 = "mousedown",
-        peg$c34 = { type: "literal", value: "mousedown", description: "\"mousedown\"" },
-        peg$c35 = "mouseup",
-        peg$c36 = { type: "literal", value: "mouseup", description: "\"mouseup\"" },
-        peg$c37 = "click",
-        peg$c38 = { type: "literal", value: "click", description: "\"click\"" },
-        peg$c39 = "dblclick",
-        peg$c40 = { type: "literal", value: "dblclick", description: "\"dblclick\"" },
-        peg$c41 = "wheel",
-        peg$c42 = { type: "literal", value: "wheel", description: "\"wheel\"" },
-        peg$c43 = "keydown",
-        peg$c44 = { type: "literal", value: "keydown", description: "\"keydown\"" },
-        peg$c45 = "keypress",
-        peg$c46 = { type: "literal", value: "keypress", description: "\"keypress\"" },
-        peg$c47 = "keyup",
-        peg$c48 = { type: "literal", value: "keyup", description: "\"keyup\"" },
-        peg$c49 = "mousewheel",
-        peg$c50 = { type: "literal", value: "mousewheel", description: "\"mousewheel\"" },
-        peg$c51 = "mousemove",
-        peg$c52 = { type: "literal", value: "mousemove", description: "\"mousemove\"" },
-        peg$c53 = "mouseout",
-        peg$c54 = { type: "literal", value: "mouseout", description: "\"mouseout\"" },
-        peg$c55 = "mouseover",
-        peg$c56 = { type: "literal", value: "mouseover", description: "\"mouseover\"" },
-        peg$c57 = "mouseenter",
-        peg$c58 = { type: "literal", value: "mouseenter", description: "\"mouseenter\"" },
-        peg$c59 = function(a, field, o, v) { return a + field + o + v },
-        peg$c60 = "e.",
-        peg$c61 = { type: "literal", value: "e.", description: "\"e.\"" },
-        peg$c62 = "i.",
-        peg$c63 = { type: "literal", value: "i.", description: "\"i.\"" },
-        peg$c64 = "d.",
-        peg$c65 = { type: "literal", value: "d.", description: "\"d.\"" },
-        peg$c66 = "p.",
-        peg$c67 = { type: "literal", value: "p.", description: "\"p.\"" },
-        peg$c68 = "==",
-        peg$c69 = { type: "literal", value: "==", description: "\"==\"" },
-        peg$c70 = "!=",
-        peg$c71 = { type: "literal", value: "!=", description: "\"!=\"" },
-        peg$c72 = ">=",
-        peg$c73 = { type: "literal", value: ">=", description: "\">=\"" },
-        peg$c74 = "<",
-        peg$c75 = { type: "literal", value: "<", description: "\"<\"" },
-        peg$c76 = "<=",
-        peg$c77 = { type: "literal", value: "<=", description: "\"<=\"" },
-        peg$c78 = /^['"a-zA-Z0-9_\-]/,
-        peg$c79 = { type: "class", value: "['\"a-zA-Z0-9_\\-]", description: "['\"a-zA-Z0-9_\\-]" },
-        peg$c80 = function(v) { return v.join("") },
-        peg$c81 = /^[ \t\r\n]/,
-        peg$c82 = { type: "class", value: "[ \\t\\r\\n]", description: "[ \\t\\r\\n]" },
-
-        peg$currPos          = 0,
-        peg$reportedPos      = 0,
-        peg$cachedPos        = 0,
-        peg$cachedPosDetails = { line: 1, column: 1, seenCR: false },
-        peg$maxFailPos       = 0,
-        peg$maxFailExpected  = [],
-        peg$silentFails      = 0,
-
-        peg$result;
-
-    if ("startRule" in options) {
-      if (!(options.startRule in peg$startRuleFunctions)) {
-        throw new Error("Can't start parsing from rule \"" + options.startRule + "\".");
+      if (startRule !== undefined) {
+        if (parseFunctions[startRule] === undefined) {
+          throw new Error("Invalid rule name: " + quote(startRule) + ".");
+        }
+      } else {
+        startRule = "merged";
       }
 
-      peg$startRuleFunction = peg$startRuleFunctions[options.startRule];
-    }
+      var pos = 0;
+      var reportFailures = 0;
+      var rightmostFailuresPos = 0;
+      var rightmostFailuresExpected = [];
 
-    function text() {
-      return input.substring(peg$reportedPos, peg$currPos);
-    }
+      function padLeft(input, padding, length) {
+        var result = input;
 
-    function offset() {
-      return peg$reportedPos;
-    }
+        var padLength = length - input.length;
+        for (var i = 0; i < padLength; i++) {
+          result = padding + result;
+        }
 
-    function line() {
-      return peg$computePosDetails(peg$reportedPos).line;
-    }
+        return result;
+      }
 
-    function column() {
-      return peg$computePosDetails(peg$reportedPos).column;
-    }
+      function escape(ch) {
+        var charCode = ch.charCodeAt(0);
+        var escapeChar;
+        var length;
 
-    function expected(description) {
-      throw peg$buildException(
-        null,
-        [{ type: "other", description: description }],
-        peg$reportedPos
-      );
-    }
+        if (charCode <= 0xFF) {
+          escapeChar = 'x';
+          length = 2;
+        } else {
+          escapeChar = 'u';
+          length = 4;
+        }
 
-    function error(message) {
-      throw peg$buildException(message, null, peg$reportedPos);
-    }
+        return '\\' + escapeChar + padLeft(charCode.toString(16).toUpperCase(), '0', length);
+      }
 
-    function peg$computePosDetails(pos) {
-      function advance(details, startPos, endPos) {
-        var p, ch;
+      function matchFailed(failure) {
+        if (pos < rightmostFailuresPos) {
+          return;
+        }
 
-        for (p = startPos; p < endPos; p++) {
-          ch = input.charAt(p);
-          if (ch === "\n") {
-            if (!details.seenCR) { details.line++; }
-            details.column = 1;
-            details.seenCR = false;
-          } else if (ch === "\r" || ch === "\u2028" || ch === "\u2029") {
-            details.line++;
-            details.column = 1;
-            details.seenCR = true;
+        if (pos > rightmostFailuresPos) {
+          rightmostFailuresPos = pos;
+          rightmostFailuresExpected = [];
+        }
+
+        rightmostFailuresExpected.push(failure);
+      }
+
+      function parse_merged() {
+        var result0, result1, result2, result3, result4;
+        var pos0, pos1;
+
+        pos0 = pos;
+        pos1 = pos;
+        result0 = parse_ordered();
+        if (result0 !== null) {
+          result1 = parse_sep();
+          if (result1 !== null) {
+            if (input.charCodeAt(pos) === 44) {
+              result2 = ",";
+              pos++;
+            } else {
+              result2 = null;
+              if (reportFailures === 0) {
+                matchFailed("\",\"");
+              }
+            }
+            if (result2 !== null) {
+              result3 = parse_sep();
+              if (result3 !== null) {
+                result4 = parse_merged();
+                if (result4 !== null) {
+                  result0 = [result0, result1, result2, result3, result4];
+                } else {
+                  result0 = null;
+                  pos = pos1;
+                }
+              } else {
+                result0 = null;
+                pos = pos1;
+              }
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
           } else {
-            details.column++;
-            details.seenCR = false;
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, o, m) { return [o].concat(m) })(pos0, result0[0], result0[4]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        if (result0 === null) {
+          pos0 = pos;
+          result0 = parse_ordered();
+          if (result0 !== null) {
+            result0 = (function(offset, o) { return [o] })(pos0, result0);
+          }
+          if (result0 === null) {
+            pos = pos0;
           }
         }
+        return result0;
       }
 
-      if (peg$cachedPos !== pos) {
-        if (peg$cachedPos > pos) {
-          peg$cachedPos = 0;
-          peg$cachedPosDetails = { line: 1, column: 1, seenCR: false };
+      function parse_ordered() {
+        var result0, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12;
+        var pos0, pos1;
+
+        pos0 = pos;
+        pos1 = pos;
+        if (input.charCodeAt(pos) === 91) {
+          result0 = "[";
+          pos++;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\"[\"");
+          }
         }
-        advance(peg$cachedPosDetails, peg$cachedPos, pos);
-        peg$cachedPos = pos;
+        if (result0 !== null) {
+          result1 = parse_sep();
+          if (result1 !== null) {
+            result2 = parse_filtered();
+            if (result2 !== null) {
+              result3 = parse_sep();
+              if (result3 !== null) {
+                if (input.charCodeAt(pos) === 44) {
+                  result4 = ",";
+                  pos++;
+                } else {
+                  result4 = null;
+                  if (reportFailures === 0) {
+                    matchFailed("\",\"");
+                  }
+                }
+                if (result4 !== null) {
+                  result5 = parse_sep();
+                  if (result5 !== null) {
+                    result6 = parse_filtered();
+                    if (result6 !== null) {
+                      result7 = parse_sep();
+                      if (result7 !== null) {
+                        if (input.charCodeAt(pos) === 93) {
+                          result8 = "]";
+                          pos++;
+                        } else {
+                          result8 = null;
+                          if (reportFailures === 0) {
+                            matchFailed("\"]\"");
+                          }
+                        }
+                        if (result8 !== null) {
+                          result9 = parse_sep();
+                          if (result9 !== null) {
+                            if (input.charCodeAt(pos) === 62) {
+                              result10 = ">";
+                              pos++;
+                            } else {
+                              result10 = null;
+                              if (reportFailures === 0) {
+                                matchFailed("\">\"");
+                              }
+                            }
+                            if (result10 !== null) {
+                              result11 = parse_sep();
+                              if (result11 !== null) {
+                                result12 = parse_ordered();
+                                if (result12 !== null) {
+                                  result0 = [result0, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12];
+                                } else {
+                                  result0 = null;
+                                  pos = pos1;
+                                }
+                              } else {
+                                result0 = null;
+                                pos = pos1;
+                              }
+                            } else {
+                              result0 = null;
+                              pos = pos1;
+                            }
+                          } else {
+                            result0 = null;
+                            pos = pos1;
+                          }
+                        } else {
+                          result0 = null;
+                          pos = pos1;
+                        }
+                      } else {
+                        result0 = null;
+                        pos = pos1;
+                      }
+                    } else {
+                      result0 = null;
+                      pos = pos1;
+                    }
+                  } else {
+                    result0 = null;
+                    pos = pos1;
+                  }
+                } else {
+                  result0 = null;
+                  pos = pos1;
+                }
+              } else {
+                result0 = null;
+                pos = pos1;
+              }
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, f1, f2, o) { return {start: f1, end: f2, middle: o}})(pos0, result0[2], result0[6], result0[12]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        if (result0 === null) {
+          result0 = parse_filtered();
+        }
+        return result0;
       }
 
-      return peg$cachedPosDetails;
-    }
+      function parse_filtered() {
+        var result0, result1, result2;
+        var pos0, pos1;
 
-    function peg$fail(expected) {
-      if (peg$currPos < peg$maxFailPos) { return; }
-
-      if (peg$currPos > peg$maxFailPos) {
-        peg$maxFailPos = peg$currPos;
-        peg$maxFailExpected = [];
+        pos0 = pos;
+        pos1 = pos;
+        result0 = parse_stream();
+        if (result0 !== null) {
+          result2 = parse_filter();
+          if (result2 !== null) {
+            result1 = [];
+            while (result2 !== null) {
+              result1.push(result2);
+              result2 = parse_filter();
+            }
+          } else {
+            result1 = null;
+          }
+          if (result1 !== null) {
+            result0 = [result0, result1];
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, s, f) { return (s.filters = f), s })(pos0, result0[0], result0[1]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        if (result0 === null) {
+          pos0 = pos;
+          result0 = parse_stream();
+          if (result0 !== null) {
+            result0 = (function(offset, s) { return s })(pos0, result0);
+          }
+          if (result0 === null) {
+            pos = pos0;
+          }
+        }
+        return result0;
       }
 
-      peg$maxFailExpected.push(expected);
-    }
+      function parse_stream() {
+        var result0, result1, result2;
+        var pos0, pos1;
 
-    function peg$buildException(message, expected, pos) {
+        pos0 = pos;
+        pos1 = pos;
+        result0 = parse_class();
+        if (result0 === null) {
+          result0 = parse_id();
+        }
+        result0 = result0 !== null ? result0 : "";
+        if (result0 !== null) {
+          result1 = parse_eventType();
+          if (result1 !== null) {
+            result0 = [result0, result1];
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, t, e) { return { event: e, target: t } })(pos0, result0[0], result0[1]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        if (result0 === null) {
+          pos0 = pos;
+          if (/^[:a-zA-z0-9_\-]/.test(input.charAt(pos))) {
+            result1 = input.charAt(pos);
+            pos++;
+          } else {
+            result1 = null;
+            if (reportFailures === 0) {
+              matchFailed("[:a-zA-z0-9_\\-]");
+            }
+          }
+          if (result1 !== null) {
+            result0 = [];
+            while (result1 !== null) {
+              result0.push(result1);
+              if (/^[:a-zA-z0-9_\-]/.test(input.charAt(pos))) {
+                result1 = input.charAt(pos);
+                pos++;
+              } else {
+                result1 = null;
+                if (reportFailures === 0) {
+                  matchFailed("[:a-zA-z0-9_\\-]");
+                }
+              }
+            }
+          } else {
+            result0 = null;
+          }
+          if (result0 !== null) {
+            result0 = (function(offset, s) { return { signal: s.join("") }})(pos0, result0);
+          }
+          if (result0 === null) {
+            pos = pos0;
+          }
+          if (result0 === null) {
+            pos0 = pos;
+            pos1 = pos;
+            if (input.charCodeAt(pos) === 40) {
+              result0 = "(";
+              pos++;
+            } else {
+              result0 = null;
+              if (reportFailures === 0) {
+                matchFailed("\"(\"");
+              }
+            }
+            if (result0 !== null) {
+              result1 = parse_merged();
+              if (result1 !== null) {
+                if (input.charCodeAt(pos) === 41) {
+                  result2 = ")";
+                  pos++;
+                } else {
+                  result2 = null;
+                  if (reportFailures === 0) {
+                    matchFailed("\")\"");
+                  }
+                }
+                if (result2 !== null) {
+                  result0 = [result0, result1, result2];
+                } else {
+                  result0 = null;
+                  pos = pos1;
+                }
+              } else {
+                result0 = null;
+                pos = pos1;
+              }
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
+            if (result0 !== null) {
+              result0 = (function(offset, m) { return { stream: m }})(pos0, result0[1]);
+            }
+            if (result0 === null) {
+              pos = pos0;
+            }
+          }
+        }
+        return result0;
+      }
+
+      function parse_class() {
+        var result0, result1, result2;
+        var pos0, pos1;
+
+        pos0 = pos;
+        pos1 = pos;
+        if (input.charCodeAt(pos) === 46) {
+          result0 = ".";
+          pos++;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\".\"");
+          }
+        }
+        if (result0 !== null) {
+          result1 = parse_value();
+          if (result1 !== null) {
+            if (input.charCodeAt(pos) === 58) {
+              result2 = ":";
+              pos++;
+            } else {
+              result2 = null;
+              if (reportFailures === 0) {
+                matchFailed("\":\"");
+              }
+            }
+            if (result2 !== null) {
+              result0 = [result0, result1, result2];
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, c) { return { type:'class', value: c } })(pos0, result0[1]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        return result0;
+      }
+
+      function parse_id() {
+        var result0, result1, result2;
+        var pos0, pos1;
+
+        pos0 = pos;
+        pos1 = pos;
+        if (input.charCodeAt(pos) === 35) {
+          result0 = "#";
+          pos++;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\"#\"");
+          }
+        }
+        if (result0 !== null) {
+          result1 = parse_value();
+          if (result1 !== null) {
+            if (input.charCodeAt(pos) === 58) {
+              result2 = ":";
+              pos++;
+            } else {
+              result2 = null;
+              if (reportFailures === 0) {
+                matchFailed("\":\"");
+              }
+            }
+            if (result2 !== null) {
+              result0 = [result0, result1, result2];
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, id) { return { type:'id', value: id } })(pos0, result0[1]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        return result0;
+      }
+
+      function parse_eventType() {
+        var result0;
+
+        if (input.substr(pos, 9) === "mousedown") {
+          result0 = "mousedown";
+          pos += 9;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\"mousedown\"");
+          }
+        }
+        if (result0 === null) {
+          if (input.substr(pos, 7) === "mouseup") {
+            result0 = "mouseup";
+            pos += 7;
+          } else {
+            result0 = null;
+            if (reportFailures === 0) {
+              matchFailed("\"mouseup\"");
+            }
+          }
+          if (result0 === null) {
+            if (input.substr(pos, 5) === "click") {
+              result0 = "click";
+              pos += 5;
+            } else {
+              result0 = null;
+              if (reportFailures === 0) {
+                matchFailed("\"click\"");
+              }
+            }
+            if (result0 === null) {
+              if (input.substr(pos, 8) === "dblclick") {
+                result0 = "dblclick";
+                pos += 8;
+              } else {
+                result0 = null;
+                if (reportFailures === 0) {
+                  matchFailed("\"dblclick\"");
+                }
+              }
+              if (result0 === null) {
+                if (input.substr(pos, 5) === "wheel") {
+                  result0 = "wheel";
+                  pos += 5;
+                } else {
+                  result0 = null;
+                  if (reportFailures === 0) {
+                    matchFailed("\"wheel\"");
+                  }
+                }
+                if (result0 === null) {
+                  if (input.substr(pos, 7) === "keydown") {
+                    result0 = "keydown";
+                    pos += 7;
+                  } else {
+                    result0 = null;
+                    if (reportFailures === 0) {
+                      matchFailed("\"keydown\"");
+                    }
+                  }
+                  if (result0 === null) {
+                    if (input.substr(pos, 8) === "keypress") {
+                      result0 = "keypress";
+                      pos += 8;
+                    } else {
+                      result0 = null;
+                      if (reportFailures === 0) {
+                        matchFailed("\"keypress\"");
+                      }
+                    }
+                    if (result0 === null) {
+                      if (input.substr(pos, 5) === "keyup") {
+                        result0 = "keyup";
+                        pos += 5;
+                      } else {
+                        result0 = null;
+                        if (reportFailures === 0) {
+                          matchFailed("\"keyup\"");
+                        }
+                      }
+                      if (result0 === null) {
+                        if (input.substr(pos, 10) === "mousewheel") {
+                          result0 = "mousewheel";
+                          pos += 10;
+                        } else {
+                          result0 = null;
+                          if (reportFailures === 0) {
+                            matchFailed("\"mousewheel\"");
+                          }
+                        }
+                        if (result0 === null) {
+                          if (input.substr(pos, 9) === "mousemove") {
+                            result0 = "mousemove";
+                            pos += 9;
+                          } else {
+                            result0 = null;
+                            if (reportFailures === 0) {
+                              matchFailed("\"mousemove\"");
+                            }
+                          }
+                          if (result0 === null) {
+                            if (input.substr(pos, 8) === "mouseout") {
+                              result0 = "mouseout";
+                              pos += 8;
+                            } else {
+                              result0 = null;
+                              if (reportFailures === 0) {
+                                matchFailed("\"mouseout\"");
+                              }
+                            }
+                            if (result0 === null) {
+                              if (input.substr(pos, 9) === "mouseover") {
+                                result0 = "mouseover";
+                                pos += 9;
+                              } else {
+                                result0 = null;
+                                if (reportFailures === 0) {
+                                  matchFailed("\"mouseover\"");
+                                }
+                              }
+                              if (result0 === null) {
+                                if (input.substr(pos, 10) === "mouseenter") {
+                                  result0 = "mouseenter";
+                                  pos += 10;
+                                } else {
+                                  result0 = null;
+                                  if (reportFailures === 0) {
+                                    matchFailed("\"mouseenter\"");
+                                  }
+                                }
+                                if (result0 === null) {
+                                  if (input.substr(pos, 10) === "touchstart") {
+                                    result0 = "touchstart";
+                                    pos += 10;
+                                  } else {
+                                    result0 = null;
+                                    if (reportFailures === 0) {
+                                      matchFailed("\"touchstart\"");
+                                    }
+                                  }
+                                  if (result0 === null) {
+                                    if (input.substr(pos, 9) === "touchmove") {
+                                      result0 = "touchmove";
+                                      pos += 9;
+                                    } else {
+                                      result0 = null;
+                                      if (reportFailures === 0) {
+                                        matchFailed("\"touchmove\"");
+                                      }
+                                    }
+                                    if (result0 === null) {
+                                      if (input.substr(pos, 8) === "touchend") {
+                                        result0 = "touchend";
+                                        pos += 8;
+                                      } else {
+                                        result0 = null;
+                                        if (reportFailures === 0) {
+                                          matchFailed("\"touchend\"");
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        return result0;
+      }
+
+      function parse_filter() {
+        var result0, result1, result2;
+        var pos0, pos1;
+
+        pos0 = pos;
+        pos1 = pos;
+        if (input.charCodeAt(pos) === 91) {
+          result0 = "[";
+          pos++;
+        } else {
+          result0 = null;
+          if (reportFailures === 0) {
+            matchFailed("\"[\"");
+          }
+        }
+        if (result0 !== null) {
+          result1 = parse_value();
+          if (result1 !== null) {
+            if (input.charCodeAt(pos) === 93) {
+              result2 = "]";
+              pos++;
+            } else {
+              result2 = null;
+              if (reportFailures === 0) {
+                matchFailed("\"]\"");
+              }
+            }
+            if (result2 !== null) {
+              result0 = [result0, result1, result2];
+            } else {
+              result0 = null;
+              pos = pos1;
+            }
+          } else {
+            result0 = null;
+            pos = pos1;
+          }
+        } else {
+          result0 = null;
+          pos = pos1;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, field) { return field  })(pos0, result0[1]);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        return result0;
+      }
+
+      function parse_value() {
+        var result0, result1;
+        var pos0;
+
+        pos0 = pos;
+        if (/^['"a-zA-Z0-9_.><=! \t\-]/.test(input.charAt(pos))) {
+          result1 = input.charAt(pos);
+          pos++;
+        } else {
+          result1 = null;
+          if (reportFailures === 0) {
+            matchFailed("['\"a-zA-Z0-9_.><=! \\t\\-]");
+          }
+        }
+        if (result1 !== null) {
+          result0 = [];
+          while (result1 !== null) {
+            result0.push(result1);
+            if (/^['"a-zA-Z0-9_.><=! \t\-]/.test(input.charAt(pos))) {
+              result1 = input.charAt(pos);
+              pos++;
+            } else {
+              result1 = null;
+              if (reportFailures === 0) {
+                matchFailed("['\"a-zA-Z0-9_.><=! \\t\\-]");
+              }
+            }
+          }
+        } else {
+          result0 = null;
+        }
+        if (result0 !== null) {
+          result0 = (function(offset, v) { return v.join("") })(pos0, result0);
+        }
+        if (result0 === null) {
+          pos = pos0;
+        }
+        return result0;
+      }
+
+      function parse_sep() {
+        var result0, result1;
+
+        result0 = [];
+        if (/^[ \t\r\n]/.test(input.charAt(pos))) {
+          result1 = input.charAt(pos);
+          pos++;
+        } else {
+          result1 = null;
+          if (reportFailures === 0) {
+            matchFailed("[ \\t\\r\\n]");
+          }
+        }
+        while (result1 !== null) {
+          result0.push(result1);
+          if (/^[ \t\r\n]/.test(input.charAt(pos))) {
+            result1 = input.charAt(pos);
+            pos++;
+          } else {
+            result1 = null;
+            if (reportFailures === 0) {
+              matchFailed("[ \\t\\r\\n]");
+            }
+          }
+        }
+        return result0;
+      }
+
+
       function cleanupExpected(expected) {
-        var i = 1;
+        expected.sort();
 
-        expected.sort(function(a, b) {
-          if (a.description < b.description) {
-            return -1;
-          } else if (a.description > b.description) {
-            return 1;
+        var lastExpected = null;
+        var cleanExpected = [];
+        for (var i = 0; i < expected.length; i++) {
+          if (expected[i] !== lastExpected) {
+            cleanExpected.push(expected[i]);
+            lastExpected = expected[i];
+          }
+        }
+        return cleanExpected;
+      }
+
+      function computeErrorPosition() {
+        /*
+         * The first idea was to use |String.split| to break the input up to the
+         * error position along newlines and derive the line and column from
+         * there. However IE's |split| implementation is so broken that it was
+         * enough to prevent it.
+         */
+
+        var line = 1;
+        var column = 1;
+        var seenCR = false;
+
+        for (var i = 0; i < Math.max(pos, rightmostFailuresPos); i++) {
+          var ch = input.charAt(i);
+          if (ch === "\n") {
+            if (!seenCR) { line++; }
+            column = 1;
+            seenCR = false;
+          } else if (ch === "\r" || ch === "\u2028" || ch === "\u2029") {
+            line++;
+            column = 1;
+            seenCR = true;
           } else {
-            return 0;
-          }
-        });
-
-        while (i < expected.length) {
-          if (expected[i - 1] === expected[i]) {
-            expected.splice(i, 1);
-          } else {
-            i++;
+            column++;
+            seenCR = false;
           }
         }
+
+        return { line: line, column: column };
       }
 
-      function buildMessage(expected, found) {
-        function stringEscape(s) {
-          function hex(ch) { return ch.charCodeAt(0).toString(16).toUpperCase(); }
 
-          return s
-            .replace(/\\/g,   '\\\\')
-            .replace(/"/g,    '\\"')
-            .replace(/\x08/g, '\\b')
-            .replace(/\t/g,   '\\t')
-            .replace(/\n/g,   '\\n')
-            .replace(/\f/g,   '\\f')
-            .replace(/\r/g,   '\\r')
-            .replace(/[\x00-\x07\x0B\x0E\x0F]/g, function(ch) { return '\\x0' + hex(ch); })
-            .replace(/[\x10-\x1F\x80-\xFF]/g,    function(ch) { return '\\x'  + hex(ch); })
-            .replace(/[\u0180-\u0FFF]/g,         function(ch) { return '\\u0' + hex(ch); })
-            .replace(/[\u1080-\uFFFF]/g,         function(ch) { return '\\u'  + hex(ch); });
-        }
+      var result = parseFunctions[startRule]();
 
-        var expectedDescs = new Array(expected.length),
-            expectedDesc, foundDesc, i;
+      /*
+       * The parser is now in one of the following three states:
+       *
+       * 1. The parser successfully parsed the whole input.
+       *
+       *    - |result !== null|
+       *    - |pos === input.length|
+       *    - |rightmostFailuresExpected| may or may not contain something
+       *
+       * 2. The parser successfully parsed only a part of the input.
+       *
+       *    - |result !== null|
+       *    - |pos < input.length|
+       *    - |rightmostFailuresExpected| may or may not contain something
+       *
+       * 3. The parser did not successfully parse any part of the input.
+       *
+       *   - |result === null|
+       *   - |pos === 0|
+       *   - |rightmostFailuresExpected| contains at least one failure
+       *
+       * All code following this comment (including called functions) must
+       * handle these states.
+       */
+      if (result === null || pos !== input.length) {
+        var offset = Math.max(pos, rightmostFailuresPos);
+        var found = offset < input.length ? input.charAt(offset) : null;
+        var errorPosition = computeErrorPosition();
 
-        for (i = 0; i < expected.length; i++) {
-          expectedDescs[i] = expected[i].description;
-        }
-
-        expectedDesc = expected.length > 1
-          ? expectedDescs.slice(0, -1).join(", ")
-              + " or "
-              + expectedDescs[expected.length - 1]
-          : expectedDescs[0];
-
-        foundDesc = found ? "\"" + stringEscape(found) + "\"" : "end of input";
-
-        return "Expected " + expectedDesc + " but " + foundDesc + " found.";
+        throw new this.SyntaxError(
+          cleanupExpected(rightmostFailuresExpected),
+          found,
+          offset,
+          errorPosition.line,
+          errorPosition.column
+        );
       }
 
-      var posDetails = peg$computePosDetails(pos),
-          found      = pos < input.length ? input.charAt(pos) : null;
+      return result;
+    },
 
-      if (expected !== null) {
-        cleanupExpected(expected);
-      }
-
-      return new SyntaxError(
-        message !== null ? message : buildMessage(expected, found),
-        expected,
-        found,
-        pos,
-        posDetails.line,
-        posDetails.column
-      );
-    }
-
-    function peg$parsestart() {
-      var s0;
-
-      s0 = peg$parsemerged();
-
-      return s0;
-    }
-
-    function peg$parsemerged() {
-      var s0, s1, s2, s3, s4, s5;
-
-      s0 = peg$currPos;
-      s1 = peg$parseordered();
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parsesep();
-        if (s2 !== peg$FAILED) {
-          if (input.charCodeAt(peg$currPos) === 44) {
-            s3 = peg$c1;
-            peg$currPos++;
-          } else {
-            s3 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c2); }
-          }
-          if (s3 !== peg$FAILED) {
-            s4 = peg$parsesep();
-            if (s4 !== peg$FAILED) {
-              s5 = peg$parsemerged();
-              if (s5 !== peg$FAILED) {
-                peg$reportedPos = s0;
-                s1 = peg$c3(s1, s5);
-                s0 = s1;
-              } else {
-                peg$currPos = s0;
-                s0 = peg$c0;
-              }
-            } else {
-              peg$currPos = s0;
-              s0 = peg$c0;
-            }
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-      if (s0 === peg$FAILED) {
-        s0 = peg$currPos;
-        s1 = peg$parseordered();
-        if (s1 !== peg$FAILED) {
-          peg$reportedPos = s0;
-          s1 = peg$c4(s1);
-        }
-        s0 = s1;
-      }
-
-      return s0;
-    }
-
-    function peg$parseordered() {
-      var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13;
-
-      s0 = peg$currPos;
-      if (input.charCodeAt(peg$currPos) === 91) {
-        s1 = peg$c5;
-        peg$currPos++;
-      } else {
-        s1 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c6); }
-      }
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parsesep();
-        if (s2 !== peg$FAILED) {
-          s3 = peg$parsefiltered();
-          if (s3 !== peg$FAILED) {
-            s4 = peg$parsesep();
-            if (s4 !== peg$FAILED) {
-              if (input.charCodeAt(peg$currPos) === 44) {
-                s5 = peg$c1;
-                peg$currPos++;
-              } else {
-                s5 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$c2); }
-              }
-              if (s5 !== peg$FAILED) {
-                s6 = peg$parsesep();
-                if (s6 !== peg$FAILED) {
-                  s7 = peg$parsefiltered();
-                  if (s7 !== peg$FAILED) {
-                    s8 = peg$parsesep();
-                    if (s8 !== peg$FAILED) {
-                      if (input.charCodeAt(peg$currPos) === 93) {
-                        s9 = peg$c7;
-                        peg$currPos++;
-                      } else {
-                        s9 = peg$FAILED;
-                        if (peg$silentFails === 0) { peg$fail(peg$c8); }
-                      }
-                      if (s9 !== peg$FAILED) {
-                        s10 = peg$parsesep();
-                        if (s10 !== peg$FAILED) {
-                          if (input.charCodeAt(peg$currPos) === 62) {
-                            s11 = peg$c9;
-                            peg$currPos++;
-                          } else {
-                            s11 = peg$FAILED;
-                            if (peg$silentFails === 0) { peg$fail(peg$c10); }
-                          }
-                          if (s11 !== peg$FAILED) {
-                            s12 = peg$parsesep();
-                            if (s12 !== peg$FAILED) {
-                              s13 = peg$parseordered();
-                              if (s13 !== peg$FAILED) {
-                                peg$reportedPos = s0;
-                                s1 = peg$c11(s3, s7, s13);
-                                s0 = s1;
-                              } else {
-                                peg$currPos = s0;
-                                s0 = peg$c0;
-                              }
-                            } else {
-                              peg$currPos = s0;
-                              s0 = peg$c0;
-                            }
-                          } else {
-                            peg$currPos = s0;
-                            s0 = peg$c0;
-                          }
-                        } else {
-                          peg$currPos = s0;
-                          s0 = peg$c0;
-                        }
-                      } else {
-                        peg$currPos = s0;
-                        s0 = peg$c0;
-                      }
-                    } else {
-                      peg$currPos = s0;
-                      s0 = peg$c0;
-                    }
-                  } else {
-                    peg$currPos = s0;
-                    s0 = peg$c0;
-                  }
-                } else {
-                  peg$currPos = s0;
-                  s0 = peg$c0;
-                }
-              } else {
-                peg$currPos = s0;
-                s0 = peg$c0;
-              }
-            } else {
-              peg$currPos = s0;
-              s0 = peg$c0;
-            }
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-      if (s0 === peg$FAILED) {
-        s0 = peg$parsefiltered();
-      }
-
-      return s0;
-    }
-
-    function peg$parsefiltered() {
-      var s0, s1, s2, s3;
-
-      s0 = peg$currPos;
-      s1 = peg$parsestream();
-      if (s1 !== peg$FAILED) {
-        s2 = [];
-        s3 = peg$parsefilter();
-        if (s3 !== peg$FAILED) {
-          while (s3 !== peg$FAILED) {
-            s2.push(s3);
-            s3 = peg$parsefilter();
-          }
-        } else {
-          s2 = peg$c0;
-        }
-        if (s2 !== peg$FAILED) {
-          peg$reportedPos = s0;
-          s1 = peg$c13(s1, s2);
-          s0 = s1;
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-      if (s0 === peg$FAILED) {
-        s0 = peg$currPos;
-        s1 = peg$parsestream();
-        if (s1 !== peg$FAILED) {
-          peg$reportedPos = s0;
-          s1 = peg$c14(s1);
-        }
-        s0 = s1;
-      }
-
-      return s0;
-    }
-
-    function peg$parsestream() {
-      var s0, s1, s2, s3;
-
-      s0 = peg$currPos;
-      s1 = peg$parseclass();
-      if (s1 === peg$FAILED) {
-        s1 = peg$parseid();
-      }
-      if (s1 === peg$FAILED) {
-        s1 = peg$c15;
-      }
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parseeventType();
-        if (s2 !== peg$FAILED) {
-          peg$reportedPos = s0;
-          s1 = peg$c16(s1, s2);
-          s0 = s1;
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-      if (s0 === peg$FAILED) {
-        s0 = peg$currPos;
-        s1 = [];
-        if (peg$c17.test(input.charAt(peg$currPos))) {
-          s2 = input.charAt(peg$currPos);
-          peg$currPos++;
-        } else {
-          s2 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c18); }
-        }
-        if (s2 !== peg$FAILED) {
-          while (s2 !== peg$FAILED) {
-            s1.push(s2);
-            if (peg$c17.test(input.charAt(peg$currPos))) {
-              s2 = input.charAt(peg$currPos);
-              peg$currPos++;
-            } else {
-              s2 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$c18); }
-            }
-          }
-        } else {
-          s1 = peg$c0;
-        }
-        if (s1 !== peg$FAILED) {
-          peg$reportedPos = s0;
-          s1 = peg$c19(s1);
-        }
-        s0 = s1;
-        if (s0 === peg$FAILED) {
-          s0 = peg$currPos;
-          if (input.charCodeAt(peg$currPos) === 40) {
-            s1 = peg$c20;
-            peg$currPos++;
-          } else {
-            s1 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c21); }
-          }
-          if (s1 !== peg$FAILED) {
-            s2 = peg$parsemerged();
-            if (s2 !== peg$FAILED) {
-              if (input.charCodeAt(peg$currPos) === 41) {
-                s3 = peg$c22;
-                peg$currPos++;
-              } else {
-                s3 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$c23); }
-              }
-              if (s3 !== peg$FAILED) {
-                peg$reportedPos = s0;
-                s1 = peg$c24(s2);
-                s0 = s1;
-              } else {
-                peg$currPos = s0;
-                s0 = peg$c0;
-              }
-            } else {
-              peg$currPos = s0;
-              s0 = peg$c0;
-            }
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        }
-      }
-
-      return s0;
-    }
-
-    function peg$parseclass() {
-      var s0, s1, s2, s3;
-
-      s0 = peg$currPos;
-      if (input.charCodeAt(peg$currPos) === 46) {
-        s1 = peg$c25;
-        peg$currPos++;
-      } else {
-        s1 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c26); }
-      }
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parsevalue();
-        if (s2 !== peg$FAILED) {
-          if (input.charCodeAt(peg$currPos) === 58) {
-            s3 = peg$c27;
-            peg$currPos++;
-          } else {
-            s3 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c28); }
-          }
-          if (s3 !== peg$FAILED) {
-            peg$reportedPos = s0;
-            s1 = peg$c29(s2);
-            s0 = s1;
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-
-      return s0;
-    }
-
-    function peg$parseid() {
-      var s0, s1, s2, s3;
-
-      s0 = peg$currPos;
-      if (input.charCodeAt(peg$currPos) === 35) {
-        s1 = peg$c30;
-        peg$currPos++;
-      } else {
-        s1 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c31); }
-      }
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parsevalue();
-        if (s2 !== peg$FAILED) {
-          if (input.charCodeAt(peg$currPos) === 58) {
-            s3 = peg$c27;
-            peg$currPos++;
-          } else {
-            s3 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c28); }
-          }
-          if (s3 !== peg$FAILED) {
-            peg$reportedPos = s0;
-            s1 = peg$c32(s2);
-            s0 = s1;
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-
-      return s0;
-    }
-
-    function peg$parseeventType() {
-      var s0;
-
-      if (input.substr(peg$currPos, 9) === peg$c33) {
-        s0 = peg$c33;
-        peg$currPos += 9;
-      } else {
-        s0 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c34); }
-      }
-      if (s0 === peg$FAILED) {
-        if (input.substr(peg$currPos, 7) === peg$c35) {
-          s0 = peg$c35;
-          peg$currPos += 7;
-        } else {
-          s0 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c36); }
-        }
-        if (s0 === peg$FAILED) {
-          if (input.substr(peg$currPos, 5) === peg$c37) {
-            s0 = peg$c37;
-            peg$currPos += 5;
-          } else {
-            s0 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c38); }
-          }
-          if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 8) === peg$c39) {
-              s0 = peg$c39;
-              peg$currPos += 8;
-            } else {
-              s0 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$c40); }
-            }
-            if (s0 === peg$FAILED) {
-              if (input.substr(peg$currPos, 5) === peg$c41) {
-                s0 = peg$c41;
-                peg$currPos += 5;
-              } else {
-                s0 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$c42); }
-              }
-              if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 7) === peg$c43) {
-                  s0 = peg$c43;
-                  peg$currPos += 7;
-                } else {
-                  s0 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$c44); }
-                }
-                if (s0 === peg$FAILED) {
-                  if (input.substr(peg$currPos, 8) === peg$c45) {
-                    s0 = peg$c45;
-                    peg$currPos += 8;
-                  } else {
-                    s0 = peg$FAILED;
-                    if (peg$silentFails === 0) { peg$fail(peg$c46); }
-                  }
-                  if (s0 === peg$FAILED) {
-                    if (input.substr(peg$currPos, 5) === peg$c47) {
-                      s0 = peg$c47;
-                      peg$currPos += 5;
-                    } else {
-                      s0 = peg$FAILED;
-                      if (peg$silentFails === 0) { peg$fail(peg$c48); }
-                    }
-                    if (s0 === peg$FAILED) {
-                      if (input.substr(peg$currPos, 10) === peg$c49) {
-                        s0 = peg$c49;
-                        peg$currPos += 10;
-                      } else {
-                        s0 = peg$FAILED;
-                        if (peg$silentFails === 0) { peg$fail(peg$c50); }
-                      }
-                      if (s0 === peg$FAILED) {
-                        if (input.substr(peg$currPos, 9) === peg$c51) {
-                          s0 = peg$c51;
-                          peg$currPos += 9;
-                        } else {
-                          s0 = peg$FAILED;
-                          if (peg$silentFails === 0) { peg$fail(peg$c52); }
-                        }
-                        if (s0 === peg$FAILED) {
-                          if (input.substr(peg$currPos, 8) === peg$c53) {
-                            s0 = peg$c53;
-                            peg$currPos += 8;
-                          } else {
-                            s0 = peg$FAILED;
-                            if (peg$silentFails === 0) { peg$fail(peg$c54); }
-                          }
-                          if (s0 === peg$FAILED) {
-                            if (input.substr(peg$currPos, 9) === peg$c55) {
-                              s0 = peg$c55;
-                              peg$currPos += 9;
-                            } else {
-                              s0 = peg$FAILED;
-                              if (peg$silentFails === 0) { peg$fail(peg$c56); }
-                            }
-                            if (s0 === peg$FAILED) {
-                              if (input.substr(peg$currPos, 10) === peg$c57) {
-                                s0 = peg$c57;
-                                peg$currPos += 10;
-                              } else {
-                                s0 = peg$FAILED;
-                                if (peg$silentFails === 0) { peg$fail(peg$c58); }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      return s0;
-    }
-
-    function peg$parsefilter() {
-      var s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
-
-      s0 = peg$currPos;
-      if (input.charCodeAt(peg$currPos) === 91) {
-        s1 = peg$c5;
-        peg$currPos++;
-      } else {
-        s1 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c6); }
-      }
-      if (s1 !== peg$FAILED) {
-        s2 = peg$parsesep();
-        if (s2 !== peg$FAILED) {
-          s3 = peg$parseaccessor();
-          if (s3 !== peg$FAILED) {
-            s4 = peg$parsevalue();
-            if (s4 !== peg$FAILED) {
-              s5 = peg$parsesep();
-              if (s5 !== peg$FAILED) {
-                s6 = peg$parseop();
-                if (s6 !== peg$FAILED) {
-                  s7 = peg$parsesep();
-                  if (s7 !== peg$FAILED) {
-                    s8 = peg$parsevalue();
-                    if (s8 !== peg$FAILED) {
-                      s9 = peg$parsesep();
-                      if (s9 !== peg$FAILED) {
-                        if (input.charCodeAt(peg$currPos) === 93) {
-                          s10 = peg$c7;
-                          peg$currPos++;
-                        } else {
-                          s10 = peg$FAILED;
-                          if (peg$silentFails === 0) { peg$fail(peg$c8); }
-                        }
-                        if (s10 !== peg$FAILED) {
-                          peg$reportedPos = s0;
-                          s1 = peg$c59(s3, s4, s6, s8);
-                          s0 = s1;
-                        } else {
-                          peg$currPos = s0;
-                          s0 = peg$c0;
-                        }
-                      } else {
-                        peg$currPos = s0;
-                        s0 = peg$c0;
-                      }
-                    } else {
-                      peg$currPos = s0;
-                      s0 = peg$c0;
-                    }
-                  } else {
-                    peg$currPos = s0;
-                    s0 = peg$c0;
-                  }
-                } else {
-                  peg$currPos = s0;
-                  s0 = peg$c0;
-                }
-              } else {
-                peg$currPos = s0;
-                s0 = peg$c0;
-              }
-            } else {
-              peg$currPos = s0;
-              s0 = peg$c0;
-            }
-          } else {
-            peg$currPos = s0;
-            s0 = peg$c0;
-          }
-        } else {
-          peg$currPos = s0;
-          s0 = peg$c0;
-        }
-      } else {
-        peg$currPos = s0;
-        s0 = peg$c0;
-      }
-
-      return s0;
-    }
-
-    function peg$parseaccessor() {
-      var s0;
-
-      if (input.substr(peg$currPos, 2) === peg$c60) {
-        s0 = peg$c60;
-        peg$currPos += 2;
-      } else {
-        s0 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c61); }
-      }
-      if (s0 === peg$FAILED) {
-        if (input.substr(peg$currPos, 2) === peg$c62) {
-          s0 = peg$c62;
-          peg$currPos += 2;
-        } else {
-          s0 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c63); }
-        }
-        if (s0 === peg$FAILED) {
-          if (input.substr(peg$currPos, 2) === peg$c64) {
-            s0 = peg$c64;
-            peg$currPos += 2;
-          } else {
-            s0 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c65); }
-          }
-          if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 2) === peg$c66) {
-              s0 = peg$c66;
-              peg$currPos += 2;
-            } else {
-              s0 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$c67); }
-            }
-          }
-        }
-      }
-
-      return s0;
-    }
-
-    function peg$parseop() {
-      var s0;
-
-      if (input.substr(peg$currPos, 2) === peg$c68) {
-        s0 = peg$c68;
-        peg$currPos += 2;
-      } else {
-        s0 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c69); }
-      }
-      if (s0 === peg$FAILED) {
-        if (input.substr(peg$currPos, 2) === peg$c70) {
-          s0 = peg$c70;
-          peg$currPos += 2;
-        } else {
-          s0 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c71); }
-        }
-        if (s0 === peg$FAILED) {
-          if (input.charCodeAt(peg$currPos) === 62) {
-            s0 = peg$c9;
-            peg$currPos++;
-          } else {
-            s0 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c10); }
-          }
-          if (s0 === peg$FAILED) {
-            if (input.substr(peg$currPos, 2) === peg$c72) {
-              s0 = peg$c72;
-              peg$currPos += 2;
-            } else {
-              s0 = peg$FAILED;
-              if (peg$silentFails === 0) { peg$fail(peg$c73); }
-            }
-            if (s0 === peg$FAILED) {
-              if (input.charCodeAt(peg$currPos) === 60) {
-                s0 = peg$c74;
-                peg$currPos++;
-              } else {
-                s0 = peg$FAILED;
-                if (peg$silentFails === 0) { peg$fail(peg$c75); }
-              }
-              if (s0 === peg$FAILED) {
-                if (input.substr(peg$currPos, 2) === peg$c76) {
-                  s0 = peg$c76;
-                  peg$currPos += 2;
-                } else {
-                  s0 = peg$FAILED;
-                  if (peg$silentFails === 0) { peg$fail(peg$c77); }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      return s0;
-    }
-
-    function peg$parsevalue() {
-      var s0, s1, s2;
-
-      s0 = peg$currPos;
-      s1 = [];
-      if (peg$c78.test(input.charAt(peg$currPos))) {
-        s2 = input.charAt(peg$currPos);
-        peg$currPos++;
-      } else {
-        s2 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c79); }
-      }
-      if (s2 !== peg$FAILED) {
-        while (s2 !== peg$FAILED) {
-          s1.push(s2);
-          if (peg$c78.test(input.charAt(peg$currPos))) {
-            s2 = input.charAt(peg$currPos);
-            peg$currPos++;
-          } else {
-            s2 = peg$FAILED;
-            if (peg$silentFails === 0) { peg$fail(peg$c79); }
-          }
-        }
-      } else {
-        s1 = peg$c0;
-      }
-      if (s1 !== peg$FAILED) {
-        peg$reportedPos = s0;
-        s1 = peg$c80(s1);
-      }
-      s0 = s1;
-
-      return s0;
-    }
-
-    function peg$parsesep() {
-      var s0, s1;
-
-      s0 = [];
-      if (peg$c81.test(input.charAt(peg$currPos))) {
-        s1 = input.charAt(peg$currPos);
-        peg$currPos++;
-      } else {
-        s1 = peg$FAILED;
-        if (peg$silentFails === 0) { peg$fail(peg$c82); }
-      }
-      while (s1 !== peg$FAILED) {
-        s0.push(s1);
-        if (peg$c81.test(input.charAt(peg$currPos))) {
-          s1 = input.charAt(peg$currPos);
-          peg$currPos++;
-        } else {
-          s1 = peg$FAILED;
-          if (peg$silentFails === 0) { peg$fail(peg$c82); }
-        }
-      }
-
-      return s0;
-    }
-
-    peg$result = peg$startRuleFunction();
-
-    if (peg$result !== peg$FAILED && peg$currPos === input.length) {
-      return peg$result;
-    } else {
-      if (peg$result !== peg$FAILED && peg$currPos < input.length) {
-        peg$fail({ type: "end", description: "end of input" });
-      }
-
-      throw peg$buildException(null, peg$maxFailExpected, peg$maxFailPos);
-    }
-  }
-
-  return {
-    SyntaxError: SyntaxError,
-    parse:       parse
+    /* Returns the parser source code. */
+    toSource: function() { return this._source; }
   };
+
+  /* Thrown when a parser encounters a syntax error. */
+
+  result.SyntaxError = function(expected, found, offset, line, column) {
+    function buildMessage(expected, found) {
+      var expectedHumanized, foundHumanized;
+
+      switch (expected.length) {
+        case 0:
+          expectedHumanized = "end of input";
+          break;
+        case 1:
+          expectedHumanized = expected[0];
+          break;
+        default:
+          expectedHumanized = expected.slice(0, expected.length - 1).join(", ")
+            + " or "
+            + expected[expected.length - 1];
+      }
+
+      foundHumanized = found ? quote(found) : "end of input";
+
+      return "Expected " + expectedHumanized + " but " + foundHumanized + " found.";
+    }
+
+    this.name = "SyntaxError";
+    this.expected = expected;
+    this.found = found;
+    this.message = buildMessage(expected, found);
+    this.offset = offset;
+    this.line = line;
+    this.column = column;
+  };
+
+  result.SyntaxError.prototype = Error.prototype;
+
+  return result;
 });
+
 define('parse/streams',['require','exports','module','d3','../dataflow/Node','../dataflow/changeset','./events','./expr','../util/index','../util/constants'],function(require, exports, module) {
   var d3 = require('d3'),
       Node = require('../dataflow/Node'),
@@ -7665,10 +7820,12 @@ define('parse/streams',['require','exports','module','d3','../dataflow/Node','..
     }
 
     function signal(sig, selector, exp, spec) {
-      var n = new Node(graph);
+      var n = new Node(graph),
+          item = spec.item ? graph.signal(spec.item.signal) : null;
       n.evaluate = function(input) {
+        if(!input.signals[selector.signal]) return graph.doNotPropagate;
         var val = expr.eval(graph, exp.fn, null, null, null, null, exp.signals);
-        if(spec.scale) val = scale(spec, val);
+        if(spec.scale) val = scale(spec, val, item ? item.value() : null);
         sig.value(val);
         input.signals[sig.name()] = 1;
         input.reflow = true;
@@ -7733,7 +7890,7 @@ define('parse/streams',['require','exports','module','d3','../dataflow/Node','..
 
         if(selector[x].event) event(s[x], selector[x], val, sp);
         else if(selector[x].signal) signal(s[x], selector[x], val, sp);
-        else if(selector[x].stream) mergedStream(s[x], selector[x], val, sp);
+        else if(selector[x].stream) mergedStream(s[x], selector[x].stream, val, sp);
         s[x].addListener(router);
       });
     };
@@ -10526,7 +10683,13 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
     //module value for 'main' here and return it as the
     //value to use for the public API for the built file.
     return {
+      core: {
+        View: require('core/View')
+      },
       dataflow: {
+        changeset: require('dataflow/changeset'),
+        Datasource: require('dataflow/Datasource'),
+        Graph: require('dataflow/Graph'),
         Node: require('dataflow/Node')
       },
       parse: {

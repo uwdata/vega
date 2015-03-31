@@ -22,6 +22,11 @@ define(function(require, exports, module) {
 
   var proto = Datasource.prototype;
 
+  proto.name = function(name) {
+    if(!arguments.length) return this._name;
+    return (this._name = name, this);
+  };
+
   proto.source = function(src) {
     if(!arguments.length) return this._source;
     return (this._source = this._graph.data(src));
@@ -43,6 +48,7 @@ define(function(require, exports, module) {
 
   proto.update = function(where, field, func) {
     var mod = this._input.mod,
+        ids = util.tuple_ids(mod),
         prev = this._revises ? null : undefined; 
 
     this._input.fields[field] = 1;
@@ -51,7 +57,10 @@ define(function(require, exports, module) {
           next = func(x);
       if (prev !== next) {
         tuple.set(x, field, next);
-        if(mod.indexOf(x) < 0) mod.push(x);
+        if(ids[x._id] !== 1) {
+          mod.push(x);
+          ids[x._id] = 1;
+        }
       }
     });
     return this;
@@ -112,18 +121,23 @@ define(function(require, exports, module) {
       util.debug(input, ["input", ds._name]);
 
       var delta = ds._input, 
-          out = changeset.create(input);
+          out = changeset.create(input),
+          rem;
+
+      // Delta might contain fields updated through API
+      util.keys(delta.fields).forEach(function(f) { out.fields[f] = 1 });
 
       if(input.reflow) {
         out.mod = ds._data.slice();
       } else {
         // update data
-        var delta = ds._input;
-        var ids = util.tuple_ids(delta.rem);
+        if(delta.rem.length) {
+          rem = util.tuple_ids(delta.rem);
+          ds._data = ds._data
+            .filter(function(x) { return rem[x._id] !== 1 });
+        }
 
-        ds._data = ds._data
-          .filter(function(x) { return ids[x._id] !== 1; })
-          .concat(delta.add);
+        if(delta.add.length) ds._data = ds._data.concat(delta.add);
 
         // reset change list
         ds._input = changeset.create();
@@ -167,21 +181,22 @@ define(function(require, exports, module) {
   };
 
   proto.listener = function() { 
-    var l = new Node(this._graph),
+    var l = new Node(this._graph).router(true),
         dest = this,
         prev = this._revises ? null : undefined;
 
     l.evaluate = function(input) {
-      this._cache = this._cache || {};  // to propagate tuples correctly
-      var output  = changeset.create(input);
+      dest._srcMap = dest._srcMap || {};  // to propagate tuples correctly
+      var map = dest._srcMap,
+          output  = changeset.create(input);
 
       output.add = input.add.map(function(t) {
-        return (l._cache[t._id] = tuple.derive(t, t._prev !== undefined ? t._prev : prev));
+        return (map[t._id] = tuple.derive(t, t._prev !== undefined ? t._prev : prev));
       });
-      output.mod = input.mod.map(function(t) { return l._cache[t._id]; });
+      output.mod = input.mod.map(function(t) { return map[t._id]; });
       output.rem = input.rem.map(function(t) { 
-        var o = l._cache[t._id];
-        l._cache[t._id] = null;
+        var o = map[t._id];
+        map[t._id] = null;
         return o;
       });
 

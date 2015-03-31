@@ -112,13 +112,13 @@ define(function(require, exports, module) {
       util.keys(r.input).forEach(function(k) {
         var ref = valueRef(i, r.input[k]);
         input.push(util.str(k)+": "+ref.val);
-        signals.concat(ref.signals);
-        scales.concat(ref.scales);
+        if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
+        if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
       });
 
       ref = valueRef(name, r);
-      signals.concat(ref.signals);
-      scales.concat(ref.scales);
+      if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
+      if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
 
       if(pred && predName) {
         signals.push.apply(signals, pred.signals);
@@ -184,13 +184,13 @@ define(function(require, exports, module) {
         if (ref.group != null) { val = "this.util.accessor("+val+")("+grp+")"; }
       } else if(ref.field.signal) {
         signalRef = util.field(ref.field.signal);
-        val = "signals["+signalRef.map(util.str).join("][")+"]";
+        val = "item.datum[signals["+signalRef.map(util.str).join("][")+"]]";
         if (ref.group != null) { val = "this.util.accessor("+val+")("+grp+")"; }
         signals.push(signalRef.shift());
       } else {
         val = "this.util.accessor(group.datum["
             + util.field(ref.field.group).map(util.str).join("][")
-            + "])(item.datum.data)";
+            + "])(item.datum)";
       }
     } else if (ref.group != null) {
       val = grp;
