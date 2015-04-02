@@ -122,7 +122,7 @@ function d3_panzoom() {
 }
 
 function vg_panzoom() {
-  var xMin = -1.6, xMax = 1.6, yMin = -1, yMax = 1;
+  var xMin = 0, xMax = 20, yMin = 0, yMax = 1;
   var startX, endX, startY, endY, isDragged = false;
 
   var i = 0, s = 0, t,
@@ -224,7 +224,7 @@ function vg_panzoom() {
       }
 
       if (++i > 125) {
-        return done(results);
+        return (done(results), true);
       }
     });
   }
@@ -241,47 +241,40 @@ function vg_overview_detail() {
       client, bb, pad;
 
   this.interactivity = function(view) {
-    d3.json('data/sp500.json', function(error, data) {
-      data.forEach(function(d) {
-        d.price = parseFloat(d.price);
-        d.date = Date.parse(d.date);
-      })
+    var isDragged = false;
+    var sp500 = this.data;
+    var extent = d3.extent(sp500, function(d) { return d.z; });
+    var xScale = d3.scale.linear()
+      .domain([0, 720])
+      .range(extent);
 
-      var isDragged = false;
-      var sp500 = data;
-      var extent = d3.extent(sp500, function(d) { return d.date; });
-      var xScale = d3.time.scale()
-        .domain([0, 720])
-        .range(extent);
+    view.on("mousedown", function(evt, item) {
+      view.data({"sp500_filtered": sp500}).update();
+      isDragged = true;
+      x0 = evt.x - OFFSET;
+      view.data({"brush": [{"min": x0, "max": x0}]}).update();
+      view.update();
+    });
 
-      view.on("mousedown", function(evt, item) {
-        view.data({"sp500_filtered": sp500}).update();
-        isDragged = true;
-        x0 = evt.x - OFFSET;
-        view.data({"brush": [{"min": x0, "max": x0}]}).update();
-        view.update();
-      });
+    view.on("mousemove", function(evt, item) {
+      if(isDragged) {
+        x1 = evt.x - OFFSET;
+        var result;
+        var filtered = sp500.filter(function(d) {
+          if (xScale(x0) > xScale(x1)) { 
+            result = [{"min": x1, "max": x0}];
+            return d.z <= xScale(x0) && d.z >= xScale(x1);
+          }
+          result = [{"min": x0, "max": x1}];
+          return d.z >= xScale(x0) && d.z <= xScale(x1);
+        });
+        view.data({"sp500_filtered": filtered}).update();
+        view.data({"brush": result}).update();
+      }
+    });
 
-      view.on("mousemove", function(evt, item) {
-        if(isDragged) {
-          x1 = evt.x - OFFSET;
-          var result;
-          var filtered = sp500.filter(function(d) {
-            if (xScale(x0) > xScale(x1)) { 
-              result = [{"min": x1, "max": x0}];
-              return d.date <= xScale(x0) && d.date >= xScale(x1);
-            }
-            result = [{"min": x0, "max": x1}];
-            return d.date >= xScale(x0) && d.date <= xScale(x1);
-          });
-          view.data({"sp500_filtered": filtered}).update();
-          view.data({"brush": result}).update();
-        }
-      });
-
-      view.on("mouseup", function(evt, item) {
-        isDragged = false;
-      });
+    view.on("mouseup", function(evt, item) {
+      isDragged = false;
     });
   }
 
@@ -312,7 +305,7 @@ function vg_overview_detail() {
       }
 
       if (++i > 100) {
-        return done(results);
+        return (done(results), true);
       }
     });
   }
@@ -333,120 +326,111 @@ function vg_brushing_linking() {
       t;
 
   this.interactivity = function(view) {
-    d3.json("data/iris.json", function(error, data) {
-      data.forEach(function(d) {
-        d.color = "grey";
-      });
+    data = view.model().data().iris
+      .map(function(d) { return d.data; });
+      .forEach(function(d) { d.color = "grey"; });
 
-      var petalLength = d3.scale.linear()
-          .range(d3.extent(data, function(d) { return d.petalLength }));
-      var petalWidth = d3.scale.linear()
-          .range(d3.extent(data, function(d) { return d.petalWidth }));
-      var sepalLength = d3.scale.linear()
-          .range(d3.extent(data, function(d) { return d.sepalLength }));
-      var sepalWidth = d3.scale.linear()
-          .range(d3.extent(data, function(d) { return d.sepalWidth }));
+    var petalLength = d3.scale.linear()
+        .range(d3.extent(data, function(d) { return d.petalLength }));
+    var petalWidth = d3.scale.linear()
+        .range(d3.extent(data, function(d) { return d.petalWidth }));
+    var sepalLength = d3.scale.linear()
+        .range(d3.extent(data, function(d) { return d.sepalLength }));
+    var sepalWidth = d3.scale.linear()
+        .range(d3.extent(data, function(d) { return d.sepalWidth }));
 
+    view.data({"iris": data}).update();
+
+    view.on("mousedown", function(evt, item) {
+      isDragged = true;
+      x = evt.x;
+      y = evt.y;
+      view.data({"brush": [{"xmin": x - X_OFFSET, "xmax": x - X_OFFSET, "ymin": y - Y_OFFSET, "ymax": y - Y_OFFSET}]});
+      identify();
+
+      data.forEach(function(d) { d.color = "grey"; });
       view.data({"iris": data}).update();
-
-      view.on("mousedown", function(evt, item) {
-        //console.log(evt.x, ",", evt.y)
-        isDragged = true;
-        x = evt.x;
-        y = evt.y;
-        view.data({"brush": [{"xmin": x - X_OFFSET, "xmax": x - X_OFFSET, "ymin": y - Y_OFFSET, "ymax": y - Y_OFFSET}]}).update();
-        view.update();
-        identify();
-
-        data.forEach(function(d) {
-          d.color = "grey";
-        });
-        view.data({"iris": data}).update();
-
-        //console.log("X:", xScale(evt.x), "Y:", yScale(evt.y))
-      });
-
-      view.on("mousemove", function(evt, item) {
-
-        if(isDragged) {
-          x2 = evt.x;
-          y2 = evt.y;
-
-          var xMin = d3.min([xScale(x), xScale(x2)]);
-          var xMax = d3.max([xScale(x), xScale(x2)]);
-          var yMin = d3.min([yScale(y), yScale(y2)]);
-          var yMax = d3.max([yScale(y), yScale(y2)]);
-
-          data.map(function(d) {
-            if(d[xAccess] >= xMin && 
-               d[xAccess] <= xMax &&
-               d[yAccess] >= yMin && 
-               d[yAccess] <= yMax) {
-              d.color = getColor(d.species)
-            } else {
-              d.color = "grey";
-            }
-          });
-          view.data({"iris": data}).update();
-
-          var result = [{"xmin": x - X_OFFSET, "xmax": x2 - X_OFFSET, "ymin": y - Y_OFFSET, "ymax": y2 - Y_OFFSET}];
-          view.data({"brush": result}).update();
-        }
-      });
-
-      view.on("mouseup", function(evt, item) {
-        isDragged = false;
-      });
-
-      function identify() {
-        if (x < 167 - X_OFFSET) {
-          xScale = petalWidth;
-          xScale.domain([35,155]);
-          xAccess = "petalWidth";
-        } else if (x < 307 - X_OFFSET){
-          xScale = petalLength;
-          xScale.domain([185,305]);
-          xAccess = "petalLength";
-        } else if (x < 457 - X_OFFSET){
-          xScale = sepalWidth;
-          xScale.domain([335,455]);
-          xAccess = "sepalWidth";
-        } else {
-          xScale = sepalLength;
-          xScale.domain([485,605]);
-          xAccess = "sepalLength";
-        }
-
-        if (y < 155 - Y_OFFSET) {
-          yScale = petalWidth;
-          yScale.domain([140,15]);
-          yAccess = "petalWidth";
-        } else if (y < 305 - Y_OFFSET){
-          yScale = petalLength;
-          yScale.domain([290,165]);
-          yAccess = "petalLength";
-        } else if (y < 455 - Y_OFFSET){
-          yScale = sepalWidth;
-          yScale.domain([440,315]);
-          yAccess = "sepalWidth";
-        } else {
-          yScale = sepalLength;
-          yScale.domain([590,465]);
-          yAccess = "sepalLength";
-        }
-      }
-
-      function getColor(species) {
-        if(species == "setosa") {
-          return "#1f77b4";
-        } else if (species == "versicolor") {
-          return "#ff7f0e";
-        } else {
-          return "#2ca02c";
-        }
-      }
-
     });
+
+    view.on("mousemove", function(evt, item) {
+
+      if(isDragged) {
+        x2 = evt.x;
+        y2 = evt.y;
+
+        var xMin = d3.min([xScale(x), xScale(x2)]);
+        var xMax = d3.max([xScale(x), xScale(x2)]);
+        var yMin = d3.min([yScale(y), yScale(y2)]);
+        var yMax = d3.max([yScale(y), yScale(y2)]);
+
+        data.map(function(d) {
+          if(d[xAccess] >= xMin && 
+             d[xAccess] <= xMax &&
+             d[yAccess] >= yMin && 
+             d[yAccess] <= yMax) {
+            d.color = getColor(d.species)
+          } else {
+            d.color = "grey";
+          }
+        });
+        view.data({"iris": data});
+
+        var result = [{"xmin": x - X_OFFSET, "xmax": x2 - X_OFFSET, "ymin": y - Y_OFFSET, "ymax": y2 - Y_OFFSET}];
+        view.data({"brush": result}).update();
+      }
+    });
+
+    view.on("mouseup", function(evt, item) {
+      isDragged = false;
+    });
+
+    function identify() {
+      if (x < 167 - X_OFFSET) {
+        xScale = petalWidth;
+        xScale.domain([35,155]);
+        xAccess = "petalWidth";
+      } else if (x < 307 - X_OFFSET){
+        xScale = petalLength;
+        xScale.domain([185,305]);
+        xAccess = "petalLength";
+      } else if (x < 457 - X_OFFSET){
+        xScale = sepalWidth;
+        xScale.domain([335,455]);
+        xAccess = "sepalWidth";
+      } else {
+        xScale = sepalLength;
+        xScale.domain([485,605]);
+        xAccess = "sepalLength";
+      }
+
+      if (y < 155 - Y_OFFSET) {
+        yScale = petalWidth;
+        yScale.domain([140,15]);
+        yAccess = "petalWidth";
+      } else if (y < 305 - Y_OFFSET){
+        yScale = petalLength;
+        yScale.domain([290,165]);
+        yAccess = "petalLength";
+      } else if (y < 455 - Y_OFFSET){
+        yScale = sepalWidth;
+        yScale.domain([440,315]);
+        yAccess = "sepalWidth";
+      } else {
+        yScale = sepalLength;
+        yScale.domain([590,465]);
+        yAccess = "sepalLength";
+      }
+    }
+
+    function getColor(species) {
+      if(species == "setosa") {
+        return "#1f77b4";
+      } else if (species == "versicolor") {
+        return "#ff7f0e";
+      } else {
+        return "#2ca02c";
+      }
+    }
   }
 
   this.benchmark = function(view, results, done) {
@@ -477,7 +461,7 @@ function vg_brushing_linking() {
       }
 
       if (++i > 100) {
-        return done(results);
+        return (done(results), true);
       }
     });
   }
