@@ -23,6 +23,7 @@ describe('SVG', function() {
     // validation xpaths for rendered SVG
     var validation = {
       "brush_interactor": "skip", // we have some problems with interactors
+      "panzoom_touch": "skip", // we have some problems with interactors
 
       "area": "//svg:g[@class='type-area']/svg:path",
       "bar": "//svg:g[@class='type-rect']/svg:rect[20]",
@@ -105,6 +106,8 @@ describe('SVG', function() {
                   xml = xml.replace(/<text ([^>]*) style="font: [^;]*; */g,
                     '<text $1 style="');
                 }
+
+                xml = xml.replace(/pointer-events: none;/g, '');
 
                 return xml
               }
