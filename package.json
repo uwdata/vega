@@ -2,13 +2,14 @@
   "name": "vega",
   "version": "2.0.0",
   "dependencies": {
-    "d3": "3.4.x",
+    "d3": "3.5.x",
     "topojson": "^1.6.18"
   },
   "devDependencies": {
     "almond": "0.3.x",
     "amd-loader": "0.0.5",
     "ascii-tree": "0.1.x",
+    "canvas": "^1.2.x",
     "chai": "^1.10.0",
     "chromedriver": "^2.14.1",
     "grunt": "0.4.x",
@@ -20,9 +21,14 @@
     "heap": "^0.2.6",
     "memwatch": "^0.2.2",
     "mocha": "^2.1.0",
+    "jsdom": "^3.1.2",
+    "cssstyle": "0.2.21",
     "pegjs": "0.8.x",
     "q": "^1.1.2",
     "requirejs": "2.1.x",
+    "xmldom": "^0.1.19",
+    "xpath": "^0.0.9",
+    "yargs": "^3.2.1",
     "selenium-server-standalone-jar": "^2.45.0",
     "summary": "^0.3.2",
     "webdriverio": "^2.4.5"

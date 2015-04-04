@@ -15,16 +15,20 @@ define(function(require, module, exports) {
       gfx = null;
 
   function context() {
-    // TODO: how to check if nodeJS in requireJS?
-    return gfx || (gfx = (/*config.isNode
-      ? new (require("canvas"))(1,1)
-      : */d3.select("body").append("canvas")
+    if (gfx) {
+      return gfx;
+    } else if (config.isNode) {
+      var canvasName = "canvas";
+      return gfx = (new (require(canvasName))(1,1)).getContext("2d");
+    } else {
+      return gfx = (d3.select("body").append("canvas")
           .attr("class", "vega_hidden")
           .attr("width", 1)
           .attr("height", 1)
           .style("display", "none")
           .node())
-      .getContext("2d"));
+          .getContext("2d");
+    }
   }
 
   function pathBounds(o, path, bounds) {
@@ -284,7 +288,7 @@ define(function(require, module, exports) {
       if (items.length) {
         items[0].bounds = func(items[0], bounds);
       }
-    } else {
+    } else if (func) {
       for (i=0, len=items.length; i<len; ++i) {
         bounds.union(itemBounds(items[i], func, opt));
       }

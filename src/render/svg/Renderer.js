@@ -1,5 +1,6 @@
 define(function(require, module, exports) {
   var util = require('../../util/index'),
+      d3 = require('d3'),
       marks = require('./marks');
 
   var renderer = function() {
@@ -98,6 +99,7 @@ define(function(require, module, exports) {
   };
   
   prototype.render = function(scene, items) {
+    marks.mark_id = 0; // re-initialize mark id
     marks.current = this;
 
     if (items) {
@@ -127,7 +129,9 @@ define(function(require, module, exports) {
   prototype.draw = function(ctx, scene, index) {
     var marktype = scene.marktype,
         renderer = marks.draw[marktype];
-    renderer.call(this, ctx, scene, index);
+    if (renderer) { // only draw when we have a renderer
+      renderer.call(this, ctx, scene, index);
+    }
   };
   
   return renderer;

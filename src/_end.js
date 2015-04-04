@@ -26,6 +26,7 @@
         GroupBuilder: require('scene/GroupBuilder')
       },
       util: require('util/index'),
-      config: require('util/config')
+      config: require('util/config'),
+      importModule: define // so that node utilities can inject modules
     }
 }));

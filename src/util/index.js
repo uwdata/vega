@@ -217,17 +217,16 @@ define(function(require, module, exports) {
   // Logging
 
   function vg_write(msg) {
-    // config.isNode
-      // ? process.stderr.write(msg + "\n")
-      // : console.log(msg);
     console.log(msg);
   }
 
   util.log = function(msg) {
+    if (config.silent) return;
     vg_write("[Vega Log] " + msg);
   };
 
   util.error = function(msg) {
+    if (config.silent) return;
     msg = "[Vega Err] " + msg;
     vg_write(msg);
     if (typeof alert !== "undefined") alert(msg);
@@ -235,7 +234,7 @@ define(function(require, module, exports) {
 
   var ts;
   util.debug = function(input, args) {
-    if(!config.debug) return;
+    if (!config.debug) return;
     var log = Function.prototype.bind.call(console.log, console);
     args.unshift(input.stamp||-1);
     args.unshift(Date.now() - ts);

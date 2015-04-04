@@ -52,9 +52,10 @@ define(function(require, exports, module) {
       this._ctx = canvas.node().getContext("2d");
       this._ctx._ratio = (s = scaleCanvas(canvas.node(), this._ctx) || 1);
       this._ctx.setTransform(s, 0, 0, s, s*pad.left, s*pad.top);
+
+      initializeLineDash(this._ctx);
     }
     
-    initializeLineDash(this._ctx);
     return this;
   };
   
@@ -196,14 +197,14 @@ define(function(require, exports, module) {
 
     renderer._imgload += 1;
     if (config.isNode) {
-      // TODO: how to check if nodeJS in requireJS?
-      // image = new (require('canvas').Image)();
-      // load(uri, function(err, data) {
-      //   if (err) { util.error(err); return; }
-      //   image.src = data;
-      //   image.loaded = true;
-      //   renderer._imgload -= 1;
-      // });
+      var cnvs = 'canvas';
+      image = new (require(cnvs).Image)();
+      load(uri, function(err, data) {
+         if (err) { util.error(err); return; }
+         image.src = data;
+         image.loaded = true;
+         renderer._imgload -= 1;
+      });
     } else {
       image = new Image();
       url = config.baseURL + uri;

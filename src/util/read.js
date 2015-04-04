@@ -1,5 +1,6 @@
 define(function(require, module, exports) {
   var util = require('./index'),
+      d3 = require('d3'),
       formats = {},
       parsers = {
         "number": util.number,

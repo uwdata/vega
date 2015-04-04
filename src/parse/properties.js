@@ -120,7 +120,7 @@ define(function(require, exports, module) {
       if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
       if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
 
-      if(predName) {
+      if(pred && predName) {
         signals.push.apply(signals, pred.signals);
         db.push.apply(db, pred.data);
         inputs.push(args+" = {"+input.join(', ')+"}");

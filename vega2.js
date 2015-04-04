@@ -913,10 +913,11 @@ define('util/config',['require','exports','module','d3'],function(require, modul
 
   config.debug = false;
 
+  // prevent calls to console.log
+  config.silent = false;
+
   // are we running in node.js?
-  // via timetler.com/2012/10/13/environment-detection-in-javascript/
-  // TODO: how does this work with requirejs?
-  config.isNode = typeof exports !== 'undefined' && this.exports !== exports;
+  config.isNode = typeof window === 'undefined';
 
   // Allows domain restriction when using data loading via XHR.
   // To enable, set it to a list of allowed domains
@@ -1056,6 +1057,7 @@ define('util/config',['require','exports','module','d3'],function(require, modul
 
   return config;
 });
+
 define('util/index',['require','exports','module','./config','heap'],function(require, module, exports) {
   var config = require('./config'),
       util = {};
@@ -1275,17 +1277,16 @@ define('util/index',['require','exports','module','./config','heap'],function(re
   // Logging
 
   function vg_write(msg) {
-    // config.isNode
-      // ? process.stderr.write(msg + "\n")
-      // : console.log(msg);
     console.log(msg);
   }
 
   util.log = function(msg) {
+    if (config.silent) return;
     vg_write("[Vega Log] " + msg);
   };
 
   util.error = function(msg) {
+    if (config.silent) return;
     msg = "[Vega Err] " + msg;
     vg_write(msg);
     if (typeof alert !== "undefined") alert(msg);
@@ -1293,7 +1294,7 @@ define('util/index',['require','exports','module','./config','heap'],function(re
 
   var ts;
   util.debug = function(input, args) {
-    if(!config.debug) return;
+    if (!config.debug) return;
     var log = Function.prototype.bind.call(console.log, console);
     args.unshift(input.stamp||-1);
     args.unshift(Date.now() - ts);
@@ -1306,6 +1307,7 @@ define('util/index',['require','exports','module','./config','heap'],function(re
 
   return util;
 });
+
 define('dataflow/tuple',['require','exports','module','../util/index','../util/constants'],function(require, module, exports) {
   var util = require('../util/index'),
       C = require('../util/constants'),
@@ -2917,16 +2919,20 @@ define('util/bounds',['require','exports','module','d3','../core/Bounds','../ren
       gfx = null;
 
   function context() {
-    // TODO: how to check if nodeJS in requireJS?
-    return gfx || (gfx = (/*config.isNode
-      ? new (require("canvas"))(1,1)
-      : */d3.select("body").append("canvas")
+    if (gfx) {
+      return gfx;
+    } else if (config.isNode) {
+      var canvasName = "canvas";
+      return gfx = (new (require(canvasName))(1,1)).getContext("2d");
+    } else {
+      return gfx = (d3.select("body").append("canvas")
           .attr("class", "vega_hidden")
           .attr("width", 1)
           .attr("height", 1)
           .style("display", "none")
           .node())
-      .getContext("2d"));
+          .getContext("2d");
+    }
   }
 
   function pathBounds(o, path, bounds) {
@@ -3186,7 +3192,7 @@ define('util/bounds',['require','exports','module','d3','../core/Bounds','../ren
       if (items.length) {
         items[0].bounds = func(items[0], bounds);
       }
-    } else {
+    } else if (func) {
       for (i=0, len=items.length; i<len; ++i) {
         bounds.union(itemBounds(items[i], func, opt));
       }
@@ -3201,6 +3207,7 @@ define('util/bounds',['require','exports','module','d3','../core/Bounds','../ren
     group: group
   };
 });
+
 define('scene/Bounder',['require','exports','module','../dataflow/Node','../util/bounds','../util/constants','../util/index'],function(require, exports, module) {
   var Node = require('../dataflow/Node'),
       bounds = require('../util/bounds'),
@@ -4821,40 +4828,44 @@ define('util/load',['require','exports','module','./index','./config'],function(
     });
   }
 
-  // TODO: how to check if nodeJS in requireJS?
-  // function vg_load_file(file, callback) {
-  //   util.log("LOAD FILE: " + file);
-  //   var idx = file.indexOf(vg_load_fileProtocol);
-  //   if (idx >= 0) file = file.slice(vg_load_fileProtocol.length);
-  //   require("fs").readFile(file, callback);
-  // }
+  function vg_load_file(file, callback) {
+    util.log("LOAD FILE: " + file);
+    var idx = file.indexOf(vg_load_fileProtocol);
+    if (idx >= 0) file = file.slice(vg_load_fileProtocol.length);
 
-  // function vg_load_http(url, callback) {
-  //   util.log("LOAD HTTP: " + url);
-  //   var req = require("http").request(url, function(res) {
-  //     var pos=0, data = new Buffer(parseInt(res.headers['content-length'],10));
-  //     res.on("error", function(err) { callback(err, null); });
-  //     res.on("data", function(x) { x.copy(data, pos); pos += x.length; });
-  //     res.on("end", function() { callback(null, data); });
-  //   });
-  //   req.on("error", function(err) { callback(err); });
-  //   req.end();
-  // }
+    var fsname = "fs";
+    require(fsname).readFile(file, callback);
+  }
+
+  function vg_load_http(url, callback) {
+    util.log("LOAD HTTP: " + url);
+    var httpname = "http";
+    var req = require(httpname).request(url, function(res) {
+      var pos=0, data = new Buffer(parseInt(res.headers['content-length'],10));
+      res.on("error", function(err) { callback(err, null); });
+      res.on("data", function(x) { x.copy(data, pos); pos += x.length; });
+      res.on("end", function() { callback(null, data); });
+    });
+    req.on("error", function(err) { callback(err); });
+    req.end();
+  }
 
   return function load(uri, callback) {
     var url = vg_load_hasProtocol(uri) ? uri : config.baseURL + uri;
-    // if (config.isNode) {
-    //   // in node.js, consult url and select file or http
-    //   var get = vg_load_isFile(url) ? vg_load_file : vg_load_http;
-    //   get(url, callback);
-    // } else {
+    if (config.isNode) {
+      // in node.js, consult url and select file or http
+      var get = vg_load_isFile(url) ? vg_load_file : vg_load_http;
+      get(url, callback);
+    } else {
       // in browser, use xhr
       vg_load_xhr(url, callback);
-    // }  
+    }  
   };
-});
-define('util/read',['require','exports','module','./index'],function(require, module, exports) {
+})
+;
+define('util/read',['require','exports','module','./index','d3'],function(require, module, exports) {
   var util = require('./index'),
+      d3 = require('d3'),
       formats = {},
       parsers = {
         "number": util.number,
@@ -4936,6 +4947,7 @@ define('util/read',['require','exports','module','./index'],function(require, mo
   read.parse = parseValues;
   return read;
 });
+
 define('parse/data',['require','exports','module','./transforms','./modify','../util/index','../util/load','../util/read'],function(require, exports, module) {
   var parseTransforms = require('./transforms'),
       parseModify = require('./modify'),
@@ -4966,7 +4978,7 @@ define('parse/data',['require','exports','module','./transforms','./modify','../
       parseData.datasource(model, d);
     });
 
-    if (count === 0) setTimeout(callback, 1);
+    if (count === 0) callback();
     return spec;
   };
 
@@ -4988,6 +5000,7 @@ define('parse/data',['require','exports','module','./transforms','./modify','../
 
   return parseData;
 });
+
 define('scene/Builder',['require','exports','module','../dataflow/Node','./Encoder','./Bounder','./Item','../parse/data','../dataflow/tuple','../dataflow/changeset','../util/index','../util/constants'],function(require, exports, module) {
   var Node = require('../dataflow/Node'),
       Encoder  = require('./Encoder'),
@@ -5711,7 +5724,7 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
       if(ref.signals) signals.push.apply(signals, util.array(ref.signals));
       if(ref.scales)  scales.push.apply(scales, util.array(ref.scales));
 
-      if(predName) {
+      if(pred && predName) {
         signals.push.apply(signals, pred.signals);
         db.push.apply(db, pred.data);
         inputs.push(args+" = {"+input.join(', ')+"}");
@@ -5839,6 +5852,7 @@ define('parse/properties',['require','exports','module','d3','../dataflow/tuple'
 
   return compile;
 });
+
 define('parse/mark',['require','exports','module','../util/index','./properties'],function(require, exports, module) {
   var util = require('../util/index'),
       parseProperties = require('./properties');
@@ -6731,6 +6745,24 @@ define('core/Model',['require','exports','module','../dataflow/Graph','../datafl
     return data;
   };
 
+  // FIXME: https://github.com/uwdata/vega/issues/28
+  proto.width = function(width) {
+    if (this._defs) this._defs.width = width;
+    if (this._defs && this._defs.marks) this._defs.marks.width = width;
+    if (this._scene) this._scene.items[0].width = width;
+    // this._reset.axes = true;
+    return this;
+  };
+
+  // FIXME: https://github.com/uwdata/vega/issues/28
+  proto.height = function(height) {
+    if (this._defs) this._defs.height = height;
+    if (this._defs && this._defs.marks) this._defs.marks.height = height;
+    if (this._scene) this._scene.items[0].height = height;
+    // this._reset.axes = true;
+    return this;
+  };
+
   function predicates(name) {
     var m = this, predicates = {};
     if(!util.isArray(name)) return this._predicates[name];
@@ -6765,6 +6797,7 @@ define('core/Model',['require','exports','module','../dataflow/Graph','../datafl
 
   return Model;
 });
+
 define('parse/events',[],function() {
   /*
    * Generated by PEG.js 0.8.0.
@@ -8662,9 +8695,10 @@ define('render/canvas/Renderer',['require','exports','module','d3','../../core/B
       this._ctx = canvas.node().getContext("2d");
       this._ctx._ratio = (s = scaleCanvas(canvas.node(), this._ctx) || 1);
       this._ctx.setTransform(s, 0, 0, s, s*pad.left, s*pad.top);
+
+      initializeLineDash(this._ctx);
     }
     
-    initializeLineDash(this._ctx);
     return this;
   };
   
@@ -8806,14 +8840,14 @@ define('render/canvas/Renderer',['require','exports','module','d3','../../core/B
 
     renderer._imgload += 1;
     if (config.isNode) {
-      // TODO: how to check if nodeJS in requireJS?
-      // image = new (require('canvas').Image)();
-      // load(uri, function(err, data) {
-      //   if (err) { util.error(err); return; }
-      //   image.src = data;
-      //   image.loaded = true;
-      //   renderer._imgload -= 1;
-      // });
+      var cnvs = 'canvas';
+      image = new (require(cnvs).Image)();
+      load(uri, function(err, data) {
+         if (err) { util.error(err); return; }
+         image.src = data;
+         image.loaded = true;
+         renderer._imgload -= 1;
+      });
     } else {
       image = new Image();
       url = config.baseURL + uri;
@@ -8831,14 +8865,16 @@ define('render/canvas/Renderer',['require','exports','module','d3','../../core/B
   
   return renderer;
 });
+
 define('render/canvas/index',['require','exports','module','./Handler','./Renderer'],function(require, exports, module) {
   return {
     Handler:  require('./Handler'),
     Renderer: require('./Renderer')
   };
 });
-define('render/svg/Handler',['require','exports','module','../../util/index'],function(require, module, exports) {
-  var util = require('../../util/index');
+define('render/svg/Handler',['require','exports','module','../../util/index','d3'],function(require, module, exports) {
+  var util = require('../../util/index'),
+      d3 = require('d3');
 
   var handler = function(el, model) {
     this._active = null;
@@ -8927,6 +8963,7 @@ define('render/svg/Handler',['require','exports','module','../../util/index'],fu
 
   return handler;
 });
+
 define('render/svg/marks',['require','exports','module','d3','../../util/index','../../util/config'],function(require, module, exports) {
   var d3 = require('d3'),
       util = require('../../util/index'),
@@ -8943,9 +8980,6 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
       area_path   = d3.svg.area().x(x).y1(y).y0(yh),
       line_path   = d3.svg.line().x(x).y(y),
       symbol_path = d3.svg.symbol().type(shape).size(size);
-  
-  var mark_id = 0,
-      clip_id = 0;
   
   var textAlign = {
     "left":   "start",
@@ -9107,7 +9141,7 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
 
     if (o.clip) {
       var c = {width: o.width || 0, height: o.height || 0},
-          id = o.clip_id || (o.clip_id = "clip" + clip_id++);
+          id = o.clip_id || (o.clip_id = "clip" + marks.clip_id++);
       marks.current._defs.clipping[id] = c;
       this.setAttribute("clip-path", "url(#"+id+")");
     }
@@ -9140,7 +9174,7 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
         p = (p = grps[index+1]) // +1 to skip group background rect
           ? d3.select(p)
           : g.append("g")
-             .attr("id", "g"+(++mark_id))
+             .attr("id", "g"+(++marks.mark_id))
              .attr("class", cssClass(scene.def));
 
     var id = p.attr("id"),
@@ -9227,13 +9261,17 @@ define('render/svg/marks',['require','exports','module','d3','../../util/index',
       image:   draw("image", image),
       draw:    draw // expose for extensibility
     },
-    current: null
+    current: null,
+    mark_id: 0,
+    clip_id: 0
   };
   
   return marks;
 });
-define('render/svg/Renderer',['require','exports','module','../../util/index','./marks'],function(require, module, exports) {
+
+define('render/svg/Renderer',['require','exports','module','../../util/index','d3','./marks'],function(require, module, exports) {
   var util = require('../../util/index'),
+      d3 = require('d3'),
       marks = require('./marks');
 
   var renderer = function() {
@@ -9332,6 +9370,7 @@ define('render/svg/Renderer',['require','exports','module','../../util/index','.
   };
   
   prototype.render = function(scene, items) {
+    marks.mark_id = 0; // re-initialize mark id
     marks.current = this;
 
     if (items) {
@@ -9361,17 +9400,510 @@ define('render/svg/Renderer',['require','exports','module','../../util/index','.
   prototype.draw = function(ctx, scene, index) {
     var marktype = scene.marktype,
         renderer = marks.draw[marktype];
-    renderer.call(this, ctx, scene, index);
+    if (renderer) { // only draw when we have a renderer
+      renderer.call(this, ctx, scene, index);
+    }
   };
   
   return renderer;
 });
+
 define('render/svg/index',['require','exports','module','./Handler','./Renderer'],function(require, exports, module) {
   return {
     Handler:  require('./Handler'),
     Renderer: require('./Renderer')
   };
 });
+define('render/svg-headless/svg',['require','exports','module','d3','../../util/index','../../util/config'],function(require, module, exports) {
+  var d3 = require('d3'),
+      util = require('../../util/index'),
+      config = require('../../util/config');
+  
+  var renderer = function() {
+    this._gid = 0; // group id counter for d3 dom compat
+    this._text = {
+      head: "",
+      root: "",
+      foot: "",
+      defs: "",
+      body: ""
+    };
+    this._defs = {
+      gradient: {},
+      clipping: {}
+    };
+  };
+
+  function open(tag, attr, raw) {
+    var s = "<" + tag;
+    if (attr) {
+      for (var key in attr) {
+        var val = attr[key];
+        if (val != null) {
+          s += " " + key + '="' + val + '"';
+        }
+      }
+    }
+    if (raw) s += " " + raw;
+    return s + ">";
+  }
+
+  function close(tag) {
+    return "</" + tag + ">";
+  }
+
+  var prototype = renderer.prototype;
+  
+  prototype.initialize = function(el, w, h, pad) {
+    var t = this._text;
+
+    t.head = open('svg', {
+      "class": 'marks',
+      width: w + pad.left + pad.right,
+      height: h + pad.top + pad.bottom,
+    }, config.svgNamespace);
+
+    t.root = open('g', {
+      transform: 'translate(' + pad.left + ',' + pad.top + ')'
+    });
+
+    t.foot = close('g') + close('svg');
+  };
+  
+  prototype.svg = function() {
+    var t = this._text;
+    return t.head + t.defs + t.root + t.body + t.foot;
+  };
+  
+  prototype.buildDefs = function() {
+    var all = this._defs,
+        dgrad = util.keys(all.gradient),
+        dclip = util.keys(all.clipping),
+        defs = "", grad, clip, i, j;
+
+    for (i=0; i<dgrad.length; ++i) {
+      var id = dgrad[i],
+          def = all.gradient[id],
+          stops = def.stops;
+
+      defs += open("linearGradient", {
+        id: id,
+        x1: def.x1,
+        x2: def.x2,
+        y1: def.y1,
+        y2: def.y2
+      });
+      
+      for (j=0; j<stops.length; ++j) {
+        defs += open("stop", {
+          offset: stops[j].offset,
+          "stop-color": stops[j].color
+        }) + close("stop");
+      }
+      
+      defs += close("linearGradient");
+    }
+    
+    for (i=0; i<dclip.length; ++i) {
+      var id = dclip[i],
+          def = all.clipping[id];
+
+      defs += open("clipPath", {id: id});
+
+      defs += open("rect", {
+        x: 0,
+        y: 0,
+        width: def.width,
+        height: def.height
+      }) + close("rect");
+
+      defs += close("clipPath");
+    }
+    
+    if (defs.length > 0) {
+      return open("defs") + defs + close("defs");
+    } else {
+      return ""
+    }
+    return defs;
+  };
+  
+  prototype.render = function(scene) {
+    this._gid = 0; // reset the group counter
+    this._text.body = this.draw(scene);
+    this._text.defs = this.buildDefs();
+  };
+
+  prototype.draw = function(scene) {
+    var meta = MARKS[scene.marktype];
+    if (!meta) {
+      return; // no known marktype (e.g., an interactor)
+    }
+    var tag  = meta[0],
+        attr = meta[1],
+        nest = meta[2] || false,
+        data = nest ? [scene.items] : scene.items,
+        defs = this._defs,
+        svg = "", i, sty;
+
+    var cls = cssClass(scene.def);
+
+    // style literals to exactly match the d3 dom
+    var styl = null;
+    if (cls === 'type-rule' || cls === 'type-path')
+      styl = 'style="pointer-events: none;"';
+    else if (cls !== 'type-group')
+      styl = 'style=""';
+
+    svg += open('g', {
+      'id': 'g' + ++this._gid, // d3 dom compat
+      'class': cssClass(scene.def)
+    }, styl);
+
+    for (i=0; i<data.length; ++i) {
+      var sty = tag === 'g' ? null : style(data[i], tag, defs);
+      svg += open(tag, attr(data[i], defs), sty);
+      if (tag === 'text') svg += escape_text(data[i].text);
+      if (tag === 'g') svg += this.drawGroup(data[i]);
+      svg += close(tag);
+    }
+
+    return svg + close('g');
+  };
+  
+  function escape_text(s) {
+    s = (s == null ? "" : String(s));
+    return s.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+  }
+  
+  function escape_font(s) {
+    return String(s).replace(/\"/g, "'");
+  }
+
+  var MARKS = {
+    group:  ['g', group],
+    area:   ['path', area, true],
+    line:   ['path', line, true],
+    arc:    ['path', arc],
+    path:   ['path', path],
+    symbol: ['path', symbol],
+    rect:   ['rect', rect],
+    rule:   ['line', rule],
+    text:   ['text', text],
+    image:  ['image', image]
+  };
+
+  prototype.drawGroup = function(scene) {
+    var svg = "",
+        axes = scene.axisItems || [],
+        items = scene.items,
+        legends = scene.legendItems || [],
+        i, j, m;
+
+    svg += group_bg(scene);
+
+    for (j=0, m=axes.length; j<m; ++j) {
+      if (axes[j].def.layer === "back") {
+        svg += this.draw(axes[j]);
+      }
+    }
+    for (j=0, m=items.length; j<m; ++j) {
+      svg += this.draw(items[j]);
+    }
+    for (j=0, m=axes.length; j<m; ++j) {
+      if (axes[j].def.layer !== "back") {
+        svg += this.draw(axes[j]);
+      }
+    }
+    for (j=0, m=legends.length; j<m; ++j) {
+      svg += this.draw(legends[j]);
+    }
+
+    return svg;
+  };
+  
+  ///
+
+  function group_bg(o) {
+    var w = o.width || 0,
+        h = o.height || 0;
+
+    var styl = o.mark.interactive === false ?
+      'style="pointer-events: none;"' : 
+      'style=""';
+
+    return open('rect', {
+      'class': 'background'
+    }, styl) + close('rect');
+  }
+  
+  function group(o, defs) {
+    var x = o.x || 0,
+        y = o.y || 0,
+        attr = {transform: "translate("+x+","+y+")"};
+
+    if (o.clip) {
+      var c = {width: o.width || 0, height: o.height || 0},
+          id = o.clip_id || (o.clip_id = "clip" + clip_id++);
+      defs.clipping[id] = c;
+      attr["clip-path"] = "url(#"+id+")";
+    }
+
+    return attr;
+  }
+  
+  function arc(o) {
+    var x = o.x || 0,
+        y = o.y || 0;
+    return {
+      transform: "translate("+x+","+y+")",
+      d: arc_path(o)
+    };
+  }
+  
+  function area(items) {
+    if (!items.length) return;
+    var o = items[0],
+        path = o.orient === "horizontal" ? area_path_h : area_path_v;
+    path
+      .interpolate(o.interpolate || "linear")
+      .tension(o.tension == null ? 0.7 : o.tension);
+    return {d: path(items)};
+  }
+  
+  function line(items) {
+    if (!items.length) return;
+    var o = items[0];
+    line_path
+      .interpolate(o.interpolate || "linear")
+      .tension(o.tension == null ? 0.7 : o.tension);
+    return {d: line_path(items)};
+  }
+  
+  function path(o) {
+    var x = o.x || 0,
+        y = o.y || 0;
+    return {
+      transform: "translate("+x+","+y+")",
+      d: o.path
+    };
+  }
+
+  function rect(o) {
+    return {
+      x: o.x || 0,
+      y: o.y || 0,
+      width: o.width || 0,
+      height: o.height || 0
+    };
+  }
+
+  function rule(o) {
+    var x1 = o.x || 0,
+        y1 = o.y || 0;
+    return {
+      x1: x1,
+      y1: y1,
+      x2: o.x2 != null ? o.x2 : x1,
+      y2: o.y2 != null ? o.y2 : y1
+    };
+  }
+  
+  function symbol(o) {
+    var x = o.x || 0,
+        y = o.y || 0;
+    return {
+      transform: "translate("+x+","+y+")",
+      d: symbol_path(o)
+    };
+  }
+  
+  function image(o) {
+    var w = o.width || (o.image && o.image.width) || 0,
+        h = o.height || (o.image && o.image.height) || 0,
+        x = o.x - (o.align === "center"
+          ? w/2 : (o.align === "right" ? w : 0)),
+        y = o.y - (o.baseline === "middle"
+          ? h/2 : (o.baseline === "bottom" ? h : 0)),
+        url = config.baseURL + o.url;
+    
+    return {
+      "xlink:href": url,
+      x: x,
+      y: y,
+      width: w,
+      height: h
+    };
+  }
+  
+  function text(o) {
+    var x = o.x || 0,
+        y = o.y || 0,
+        dx = o.dx || 0,
+        dy = o.dy || 0,
+        a = o.angle || 0,
+        r = o.radius || 0,
+        align = textAlign[o.align || "left"],
+        base = o.baseline==="top" ? ".9em"
+             : o.baseline==="middle" ? ".35em" : 0;
+
+    if (r) {
+      var t = (o.theta || 0) - Math.PI/2;
+      x += r * Math.cos(t);
+      y += r * Math.sin(t);
+    }
+
+    return {
+      x: x + dx,
+      y: y + dy,
+      'text-anchor': align,
+      transform: a ? "rotate("+a+" "+x+","+y+")" : null,
+      dy: base ? base : null
+    };
+  }
+  
+  ///
+
+  function cssClass(def) {
+    var cls = "type-" + def.type;
+    if (def.name) cls += " " + def.name;
+    return cls;
+  }
+
+  function x(o)     { return o.x || 0; }
+  function y(o)     { return o.y || 0; }
+  function xw(o)    { return o.x + o.width || 0; }
+  function yh(o)    { return o.y + o.height || 0; }
+  function key(o)   { return o.key; }
+  function size(o)  { return o.size==null ? 100 : o.size; }
+  function shape(o) { return o.shape || "circle"; }
+
+  var arc_path    = d3.svg.arc(),
+      area_path_v = d3.svg.area().x(x).y1(y).y0(yh),
+      area_path_h = d3.svg.area().y(y).x0(xw).x1(x),
+      line_path   = d3.svg.line().x(x).y(y),
+      symbol_path = d3.svg.symbol().type(shape).size(size);
+
+  var mark_id = 0,
+      clip_id = 0;
+
+  var textAlign = {
+    "left":   "start",
+    "center": "middle",
+    "right":  "end"
+  };
+
+  var styles = {
+    "fill":             "fill",
+    "fillOpacity":      "fill-opacity",
+    "stroke":           "stroke",
+    "strokeWidth":      "stroke-width",
+    "strokeOpacity":    "stroke-opacity",
+    "strokeCap":        "stroke-linecap",
+    "strokeDash":       "stroke-dasharray",
+    "strokeDashOffset": "stroke-dashoffset",
+    "opacity":          "opacity"
+  };
+
+  var styleProps = util.keys(styles);
+
+  function style(d, tag, defs) {
+    var i, n, prop, name, value,
+        o = d.mark ? d : d.length ? d[0] : null;
+    if (o === null) return null;
+
+    var s = "";
+
+    if (tag === 'text') {
+      s += 'font: ' + fontString(o) + ';';
+    }
+    
+    for (i=0, n=styleProps.length; i<n; ++i) {
+      prop = styleProps[i];
+      name = styles[prop];
+      value = o[prop];
+
+      if (value == null) {
+        if (name === "fill") s += 'fill: none;';
+      } else {
+        if (value.id) {
+          // ensure definition is included
+          defs.gradient[value.id] = value;
+          value = "url(" + window.location.href + "#" + value.id + ")";
+        }
+        s += (s.length ? ' ' : '') + name + ': ' + value + ';'
+      }
+    }
+    
+    // not that we don't exclude blank styles for d3 dom compat
+    return 'style="'+s+'"';
+  }
+
+  function fontString(o) {
+    var f = (o.fontStyle ? o.fontStyle + " " : "")
+      + (o.fontVariant ? o.fontVariant + " " : "")
+      + (o.fontWeight ? o.fontWeight + " " : "")
+      + (o.fontSize != null ? o.fontSize : config.render.fontSize) + "px "
+      + (o.font && escape_font(o.font) || config.render.font);
+    return f;
+  }
+
+  return renderer;
+});
+
+define('render/svg-headless/Renderer',['require','exports','module','d3','../../util/index','../../util/config','./svg'],function(require, exports, module) {
+  var d3 = require('d3'),
+      util = require('../../util/index'),
+      config = require('../../util/config');
+
+  var renderer = function() {
+    this._builder = null;
+  };
+  
+  var prototype = renderer.prototype;
+  
+  prototype.initialize = function(el, width, height, pad) {
+    var SVGBuilder = require('./svg');
+    this._builder = new SVGBuilder();
+
+    return this.resize(width, height, pad);
+  }
+
+  prototype.resize = function(width, height, pad) {
+    this._width = width;
+    this._height = height;
+    this._padding = pad || {top:0, left:0, bottom:0, right:0};
+    this._autopad = util.isString(this._padding) ? 1 : 0;
+
+    var w = this._width, h = this._height, pad = this._padding;
+    
+    // (re-)configure builder size
+    this._builder.initialize(null, w, h, pad);
+
+    return this;
+  };
+
+  prototype.render = function(scene, items) {
+    // headless always draws the entire scene, ignoring items
+    this._builder.render(scene);
+    return this;
+  };
+
+  prototype.svg = function() {
+    return this._builder.svg();
+  };
+  
+  return renderer;
+});
+
+define('render/svg-headless/index',['require','exports','module','./Renderer'],function(require, exports, module) {
+  return {
+    Renderer: require('./Renderer')
+  };
+});
+
 define('scene/Transition',['require','exports','module','../dataflow/tuple','../util/bounds','../util/constants'],function(require, exports, module) {
   var tuple = require('../dataflow/tuple'),
       calcBounds = require('../util/bounds'),
@@ -9469,12 +10001,13 @@ define('scene/Transition',['require','exports','module','../dataflow/tuple','../
   
   return Transition;
 });
-define('core/View',['require','exports','module','d3','../dataflow/Node','../parse/streams','../render/canvas/index','../render/svg/index','../scene/Transition','../util/config','../util/index','../dataflow/changeset'],function(require, exports, module) {
+define('core/View',['require','exports','module','d3','../dataflow/Node','../parse/streams','../render/canvas/index','../render/svg/index','../render/svg-headless/index','../scene/Transition','../util/config','../util/index','../dataflow/changeset'],function(require, exports, module) {
   var d3 = require('d3'),
       Node = require('../dataflow/Node'),
       parseStreams = require('../parse/streams'),
       canvas = require('../render/canvas/index'),
       svg = require('../render/svg/index'),
+      svgh = require('../render/svg-headless/index'),
       Transition = require('../scene/Transition'),
       config = require('../util/config'),
       util = require('../util/index'),
@@ -9491,7 +10024,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
     this._renderer = null;
     this._handler = null;
     this._io = canvas;
-    if (el) this.initialize(el);
+    this.initialize(el || null);
   };
 
   var prototype = View.prototype;
@@ -9516,7 +10049,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
     if (!arguments.length) return this.__width;
     if (this.__width !== width) {
       this._width = this.__width = width;
-      if (this._el) this.initialize(this._el.parentNode);
+      this.reinit();
       if (this._strict) this._autopad = 1;
     }
     return this;
@@ -9526,7 +10059,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
     if (!arguments.length) return this.__height;
     if (this.__height !== height) {
       this._height = this.__height = height;
-      if (this._el) this.initialize(this._el.parentNode);
+      this.reinit();
       if (this._strict) this._autopad = 1;
     }
     return this;
@@ -9544,8 +10077,8 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
         this._padding = pad;
         this._strict = false;
       }
+      this._renderer.resize(this._width, this._height, pad);
       if (this._el) {
-        this._renderer.resize(this._width, this._height, pad);
         this._handler.padding(pad);
       }
     }
@@ -9572,7 +10105,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
       this._height = Math.max(0, this.__height - (t+b));
       this._model.width(this._width);
       this._model.height(this._height);
-      if (this._el) this.initialize(this._el.parentNode);
+      this.reinit();
       this.update();
     } else {
       this.padding(pad).update(opt);
@@ -9584,63 +10117,76 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
     if (!arguments.length) return this._viewport;
     if (this._viewport !== size) {
       this._viewport = size;
-      if (this._el) this.initialize(this._el.parentNode);
+      this.reinit();
     }
     return this;
   };
 
   prototype.renderer = function(type) {
-    if (!arguments.length) return this._io;
+    if (!arguments.length) return this._renderer;
+
     if (type === "canvas") type = canvas;
-    if (type === "svg") type = svg;
+    else if (type === "svg") type = svg;
+    else if (type === "svg-headless") type = svgh;
+    else if (util.isString(type)) throw new Error("Unknown renderer: " + type);
+    else if (!type) throw new Error("No renderer specified");
+
     if (this._io !== type) {
       this._io = type;
       this._renderer = null;
-      if (this._el) this.initialize(this._el.parentNode);
+      this.reinit();
       if (this._build) this.render();
     }
     return this;
   };
   
+  prototype.reinit = function() {
+      this.initialize(this._el ? this._el.parentNode : null);
+  }
+
   prototype.initialize = function(el) {
     var v = this, prevHandler,
         w = v._width, h = v._height, pad = v._padding;
     
     // clear pre-existing container
-    d3.select(el).select("div.vega").remove();
-    
-    // add div container
-    this._el = el = d3.select(el)
-      .append("div")
-      .attr("class", "vega")
-      .style("position", "relative")
-      .node();
-    if (v._viewport) {
-      d3.select(el)
-        .style("width",  (v._viewport[0] || w)+"px")
-        .style("height", (v._viewport[1] || h)+"px")
-        .style("overflow", "auto");
+    if (el) {
+      d3.select(el).select("div.vega").remove();
+      
+      // add div container
+      this._el = el = d3.select(el)
+        .append("div")
+        .attr("class", "vega")
+        .style("position", "relative")
+        .node();
+      if (v._viewport) {
+        d3.select(el)
+          .style("width",  (v._viewport[0] || w)+"px")
+          .style("height", (v._viewport[1] || h)+"px")
+          .style("overflow", "auto");
+      }
     }
-    
+
     // renderer
     v._renderer = (v._renderer || new this._io.Renderer())
       .initialize(el, w, h, pad);
     
     // input handler
-    prevHandler = v._handler;
-    v._handler = new this._io.Handler()
-      .initialize(el, pad, v)
-      .model(v._model);
+    if (el) {
+      prevHandler = v._handler;
+      v._handler = new this._io.Handler()
+        .initialize(el, pad, v)
+        .model(v._model);
 
-    if (prevHandler) {
-      prevHandler.handlers().forEach(function(h) {
-        v._handler.on(h.type, h.handler);
-      });
-    } else {
-      // Register event listeners for signal stream definitions.
-      parseStreams(this);
+      if (prevHandler) {
+        prevHandler.handlers().forEach(function(h) {
+          v._handler.on(h.type, h.handler);
+        });
+      } else {
+        // Register event listeners for signal stream definitions.
+        parseStreams(this);
+      }
     }
-    
+
     return this;
   };
 
@@ -9714,7 +10260,7 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
         .padding(defs.padding)
         .renderer(opt.renderer || "canvas");
 
-      if (opt.el) v.initialize(opt.el);
+      v.initialize(opt.el || null);
       if (opt.data) v.data(opt.data);
     
       return v;
@@ -9722,7 +10268,8 @@ define('core/View',['require','exports','module','d3','../dataflow/Node','../par
   };
 
   return View;
-});
+})
+;
 define('parse/padding',['require','exports','module','../util/index'],function(require, module, exports) {
   var util = require('../util/index');
 
@@ -10041,10 +10588,11 @@ define('parse/interactors',['require','exports','module','../util/load','../util
       }
     });
 
-    if (count === 0) setTimeout(inject, 1);
+    if (count === 0) inject();
     return spec;
   }
 });
+
 define('parse/spec',['require','exports','module','../core/Model','../core/View','../parse/padding','../parse/marks','../parse/signals','../parse/predicates','../parse/data','../parse/interactors','../util/index'],function(require, exports, module) {
   var Model = require('../core/Model'), 
       View = require('../core/View'), 
@@ -10075,12 +10623,14 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
         padding: parsePadding(spec.padding),
         signals: parseSignals(model, spec.signals),
         predicates: parsePredicates(model, spec.predicates),
-        marks: parseMarks(model, spec, width, height),
-        data: parseData(model, spec.data, function() { callback(viewFactory(model)); })
+        marks: parseMarks(model, spec, width, height)
       });
+
+      parseData(model, spec.data, function() { callback(viewFactory(model)); });
     });
   }
 });
+
     // d3 doesn't expose itself when running under AMD, so
     // we do it manually. 
     // See: https://github.com/mbostock/d3/issues/1693
@@ -10109,6 +10659,7 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
         GroupBuilder: require('scene/GroupBuilder')
       },
       util: require('util/index'),
-      config: require('util/config')
+      config: require('util/config'),
+      importModule: define // so that node utilities can inject modules
     }
 }));

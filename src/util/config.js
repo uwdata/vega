@@ -4,10 +4,11 @@ define(function(require, module, exports) {
 
   config.debug = false;
 
+  // prevent calls to console.log
+  config.silent = false;
+
   // are we running in node.js?
-  // via timetler.com/2012/10/13/environment-detection-in-javascript/
-  // TODO: how does this work with requirejs?
-  config.isNode = typeof exports !== 'undefined' && this.exports !== exports;
+  config.isNode = typeof window === 'undefined';
 
   // Allows domain restriction when using data loading via XHR.
   // To enable, set it to a list of allowed domains

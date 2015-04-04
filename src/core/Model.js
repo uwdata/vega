@@ -33,6 +33,24 @@ define(function(require, exports, module) {
     return data;
   };
 
+  // FIXME: https://github.com/uwdata/vega/issues/28
+  proto.width = function(width) {
+    if (this._defs) this._defs.width = width;
+    if (this._defs && this._defs.marks) this._defs.marks.width = width;
+    if (this._scene) this._scene.items[0].width = width;
+    // this._reset.axes = true;
+    return this;
+  };
+
+  // FIXME: https://github.com/uwdata/vega/issues/28
+  proto.height = function(height) {
+    if (this._defs) this._defs.height = height;
+    if (this._defs && this._defs.marks) this._defs.marks.height = height;
+    if (this._scene) this._scene.items[0].height = height;
+    // this._reset.axes = true;
+    return this;
+  };
+
   function predicates(name) {
     var m = this, predicates = {};
     if(!util.isArray(name)) return this._predicates[name];
