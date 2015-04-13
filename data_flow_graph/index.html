@@ -1,0 +1,33 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <title>Data Flow Graph</title>
+    <style>
+      .background {
+        fill: white;
+      }
+      .link {
+        fill: none;
+        stroke-width: 3px;
+        opacity: 0.7;
+        marker-end: url(#end-arrow);
+      }
+      .label {
+        fill: black;
+        font-family: Verdana;
+        font-size: 25px;
+        text-anchor: middle;
+        cursor: move;
+      }
+    </style>
+    <script src="http://marvl.infotech.monash.edu/webcola/cola.v3.min.js"></script>
+    <script src="../examples/lib/d3.v3.min.js"></script>
+    <script src="../vega2.js"></script>
+    <script src="DFG.js"></script>
+    <script src="graph.js"></script>
+  </head>
+  <body>
+    <div id="graph"></div>
+  </body>
+</html>

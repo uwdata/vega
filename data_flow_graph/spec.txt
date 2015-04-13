@@ -1,0 +1,144 @@
+{
+  "width": 250,
+  "height": 200,
+  "data": [
+    {
+      "name": "weather",
+      "values": [{"day":"M","record":{"high":62,"low":15},"normal":{"high":50,"low":38},"actual":{"high":48,"low":36},"id":0},{"day":"T","record":{"high":62,"low":23},"normal":{"high":50,"low":38},"actual":{"high":50,"low":40},"id":1},{"day":"W","record":{"high":61,"low":20},"normal":{"high":50,"low":38},"actual":{"high":55,"low":36},"id":2},{"day":"T","record":{"high":67,"low":21},"normal":{"high":50,"low":38},"actual":{"high":51,"low":33},"id":3},{"day":"F","record":{"high":61,"low":23},"normal":{"high":50,"low":38},"actual":{"high":50,"low":30},"id":4},{"day":"S","record":{"high":67,"low":20},"normal":{"high":50,"low":38},"forecast":{"high":{"high":53,"low":49},"low":{"high":40,"low":35}},"id":5},{"day":"S","record":{"high":63,"low":23},"normal":{"high":50,"low":39},"forecast":{"high":{"high":55,"low":49},"low":{"high":42,"low":37}},"id":6},{"day":"M","record":{"high":61,"low":26},"normal":{"high":51,"low":39},"forecast":{"high":{"high":53,"low":49},"low":{"high":43,"low":40}},"id":7},{"day":"T","record":{"high":61,"low":24},"normal":{"high":51,"low":39},"forecast":{"high":{"high":52,"low":46},"low":{"high":44,"low":40}},"id":8},{"day":"W","record":{"high":63,"low":20},"normal":{"high":51,"low":39},"forecast":{"high":{"high":53,"low":46},"low":{"high":43,"low":38}},"id":9}]
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "ordinal",
+      "range": "width",
+      "padding": 0.1, "round": true,
+      "domain": {"data": "weather", "field": "id"}
+    },
+    {
+      "name": "y",
+      "range": "height",
+      "nice": true, "zero": false, "round": true,
+      "domain": {
+        "data": "weather",
+        "field": ["record.low", "record.high"]
+      }
+    }
+  ],
+  "axes": [
+    { "type": "y", "scale": "y", "ticks": 3, "tickSize": 0,
+      "orient": "right", "grid": true,
+      "properties": {
+        "grid": {"stroke": {"value": "white"}, "strokeWidth": {"value": 2}},
+        "axis": {"stroke": {"value": "transparent"}}
+      }
+    }
+  ],
+  "marks": [
+    {
+      "type": "text",
+      "from": {"data": "weather"},
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id"},
+          "dx": {"scale": "x", "band": true, "mult": 0.5},
+          "y": {"value": 0},
+          "fill": {"value": "#000"},
+          "text": {"field": "day"},
+          "align": {"value": "center"},
+          "baseline": {"value": "bottom"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {"data": "weather"},
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id"},
+          "width": {"scale": "x", "band": true, "offset": -1},
+          "y": {"scale": "y", "field": "record.low"},
+          "y2": {"scale": "y", "field": "record.high"},
+          "fill": {"value": "#ccc"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {"data": "weather"},
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id"},
+          "width": {"scale": "x", "band": true, "offset": -1},
+          "y": {"scale": "y", "field": "normal.low"},
+          "y2": {"scale": "y", "field": "normal.high"},
+          "fill": {"value": "#999"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {
+        "data": "weather",
+        "transform": [{"type":"filter", "test":"d.actual"}]
+      },
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id", "offset": 4},
+          "width": {"scale": "x", "band": true, "offset": -8},
+          "y": {"scale": "y", "field": "actual.low"},
+          "y2": {"scale": "y", "field": "actual.high"},
+          "fill": {"value": "#000"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {
+        "data": "weather",
+        "transform": [{"type":"filter", "test":"d.forecast"}]
+      },
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id", "offset": 9},
+          "width": {"scale": "x", "band": true, "offset": -18},
+          "y": {"scale": "y", "field": "forecast.low.low"},
+          "y2": {"scale": "y", "field": "forecast.high.high"},
+          "fill": {"value": "#000"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {
+        "data": "weather",
+        "transform": [{"type":"filter", "test":"d.forecast"}]
+      },
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id", "offset": 4},
+          "width": {"scale": "x", "band": true, "offset": -8},
+          "y": {"scale": "y", "field": "forecast.low.low"},
+          "y2": {"scale": "y", "field": "forecast.low.high"},
+          "fill": {"value": "#000"}
+        }
+      }
+    },
+    {
+      "type": "rect",
+      "from": {
+        "data": "weather",
+        "transform": [{"type":"filter", "test":"d.forecast"}]
+      },
+      "properties": {
+        "enter": {
+          "x": {"scale": "x", "field": "id", "offset": 4},
+          "width": {"scale": "x", "band": true, "offset": -8},
+          "y": {"scale": "y", "field": "forecast.high.low"},
+          "y2": {"scale": "y", "field": "forecast.high.high"},
+          "fill": {"value": "#000"}
+        }
+      }
+    }
+  ]
+}
