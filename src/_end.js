@@ -9,21 +9,26 @@
     //module value for 'main' here and return it as the
     //value to use for the public API for the built file.
     return {
-      core: {
-        View: require('core/View')
-      },
       dataflow: {
         changeset: require('dataflow/changeset'),
+        Collector: require('dataflow/Collector'),
         Datasource: require('dataflow/Datasource'),
         Graph: require('dataflow/Graph'),
-        Node: require('dataflow/Node')
+        Node: require('dataflow/Node'),
+        Signal: require('dataflow/Signal')
       },
       parse: {
         spec: require('parse/spec')
       },
       scene: {
+        Bounder: require('scene/Bounder'),
         Builder: require('scene/Builder'),
-        GroupBuilder: require('scene/GroupBuilder')
+        Encoder: require('scene/Encoder'),
+        GroupBuilder: require('scene/GroupBuilder'),
+        Scale: require('scene/Scale')
+      },
+      transforms: {
+        index: require('transforms/index')
       },
       util: require('util/index'),
       config: require('util/config')

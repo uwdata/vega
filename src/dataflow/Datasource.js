@@ -116,6 +116,8 @@ define(function(require, exports, module) {
     var input = new Node(this._graph)
       .router(true)
       .collector(true);
+    input._isInput = true; //TODO: how best to surface this?
+    //console.log("DATASOURCE INPUT", input._id)
 
     input.evaluate = function(input) {
       util.debug(input, ["input", ds._name]);
@@ -158,6 +160,8 @@ define(function(require, exports, module) {
     var output = new Node(this._graph)
       .router(true)
       .collector(true);
+    output._isOutput = true;
+    //console.log("DATASOURCE OUTPUT", output._id)
 
     output.evaluate = function(input) {
       util.debug(input, ["output", ds._name]);
