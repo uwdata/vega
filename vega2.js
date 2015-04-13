@@ -15,7 +15,7 @@
 }(this, function (d3, topojson) {
     //almond, and your modules will be inlined here
 /**
- * @license almond 0.3.0 Copyright (c) 2011-2014, The Dojo Foundation All Rights Reserved.
+ * @license almond 0.3.1 Copyright (c) 2011-2014, The Dojo Foundation All Rights Reserved.
  * Available via the MIT or new BSD license.
  * see: http://github.com/jrburke/almond for details
  */
@@ -60,12 +60,6 @@ var requirejs, require, define;
             //otherwise, assume it is a top-level require that will
             //be relative to baseUrl in the end.
             if (baseName) {
-                //Convert baseName to array, and lop off the last part,
-                //so that . matches that "directory" and not name of the baseName's
-                //module. For instance, baseName of "one/two/three", maps to
-                //"one/two/three.js", but we want the directory, "one/two" for
-                //this normalization.
-                baseParts = baseParts.slice(0, baseParts.length - 1);
                 name = name.split('/');
                 lastIndex = name.length - 1;
 
@@ -74,7 +68,11 @@ var requirejs, require, define;
                     name[lastIndex] = name[lastIndex].replace(jsSuffixRegExp, '');
                 }
 
-                name = baseParts.concat(name);
+                //Lop off the last part of baseParts, so that . matches the
+                //"directory" and not name of the baseName's module. For instance,
+                //baseName of "one/two/three", maps to "one/two/three.js", but we
+                //want the directory, "one/two" for this normalization.
+                name = baseParts.slice(0, baseParts.length - 1).concat(name);
 
                 //start trimDots
                 for (i = 0; i < name.length; i += 1) {
@@ -424,6 +422,9 @@ var requirejs, require, define;
     requirejs._defined = defined;
 
     define = function (name, deps, callback) {
+        if (typeof name !== 'string') {
+            throw new Error('See almond README: incorrect module build, no module name');
+        }
 
         //This module may not have dependencies
         if (!deps.splice) {
@@ -1650,6 +1651,8 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
     var input = new Node(this._graph)
       .router(true)
       .collector(true);
+    input._isInput = true; //TODO: how best to surface this?
+    //console.log("DATASOURCE INPUT", input._id)
 
     input.evaluate = function(input) {
       util.debug(input, ["input", ds._name]);
@@ -1692,6 +1695,8 @@ define('dataflow/Datasource',['require','exports','module','./changeset','./tupl
     var output = new Node(this._graph)
       .router(true)
       .collector(true);
+    output._isOutput = true;
+    //console.log("DATASOURCE OUTPUT", output._id)
 
     output.evaluate = function(input) {
       util.debug(input, ["output", ds._name]);
@@ -10203,21 +10208,26 @@ define('parse/spec',['require','exports','module','../core/Model','../core/View'
     //module value for 'main' here and return it as the
     //value to use for the public API for the built file.
     return {
-      core: {
-        View: require('core/View')
-      },
       dataflow: {
         changeset: require('dataflow/changeset'),
+        Collector: require('dataflow/Collector'),
         Datasource: require('dataflow/Datasource'),
         Graph: require('dataflow/Graph'),
-        Node: require('dataflow/Node')
+        Node: require('dataflow/Node'),
+        Signal: require('dataflow/Signal')
       },
       parse: {
         spec: require('parse/spec')
       },
       scene: {
+        Bounder: require('scene/Bounder'),
         Builder: require('scene/Builder'),
-        GroupBuilder: require('scene/GroupBuilder')
+        Encoder: require('scene/Encoder'),
+        GroupBuilder: require('scene/GroupBuilder'),
+        Scale: require('scene/Scale')
+      },
+      transforms: {
+        index: require('transforms/index')
       },
       util: require('util/index'),
       config: require('util/config')
