@@ -37,7 +37,8 @@
     "vinyl-buffer": "^1.0.0",
     "vinyl-source-stream": "^1.1.0",
     "watchify": "^3.1.0",
-    "webdriverio": "^2.4.5"
+    "webdriverio": "^2.4.5",
+    "z-schema": "^3.9.5"
   },
   "scripts": {
     "test": "gulp test"

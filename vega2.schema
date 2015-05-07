@@ -1,0 +1,1272 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "description": "Schema for vega specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["data", "marks"],
+  "properties": {
+    "name": {
+      "description": "A unique name for the visualization specification.",
+      "type": "string"
+    },
+    "width": {
+      "description": "The total width, in pixels, of the data rectangle.",
+      "type": "number"
+    },
+    "height": {
+      "description": "The total height, in pixels, of the data rectangle.",
+      "type": "number"
+    },
+    "viewport": {
+      "description": "The width and height of the on-screen viewport, in pixels. If necessary, clipping and scrolling will be applied.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number"
+      }
+    },
+    "padding": {
+      "description": "The internal padding, in pixels, from the edge of the visualization canvas to the data rectangle. If an object is provided, it must include {top, left, right, bottom} properties. Two string values are also acceptable: \"auto\" (the default) and \"strict\". Auto-padding computes the padding dynamically based on the contents of the visualization. All marks, including axes and legends, are used to compute the necessary padding. \"Strict\" auto-padding attempts to adjust the padding such that the overall width and height of the visualization is unchanged. This mode can cause the visualization's width and height parameters to be adjusted such that the total size, including padding, remains constant. Note that in some cases strict padding is not possible; for example, if the axis labels are much larger than the data rectangle.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["auto", "strict"]
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["top", "bottom", "left", "right"],
+          "properties": {
+            "top": {
+              "type": "number"
+            },
+            "bottom": {
+              "type": "number"
+            },
+            "left": {
+              "type": "number"
+            },
+            "right": {
+              "type": "number"
+            }
+          }
+        }
+      ]
+    },
+    "data": {
+      "description": "Definitions of data to visualize.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/data"
+      }
+    },
+    "interactors": {
+      "description": "Documentation forthcoming",
+      "type": "array",
+      "items": { "$ref": "#/definitions/interactor" }
+    },
+    "signals": {
+      "description": "Documentation forthcoming",
+      "type": "array",
+      "items": { "$ref": "#/definitions/signal" }
+    },
+    "predicates": {
+      "description": "Documentation forthcoming",
+      "type": "array",
+      "items": { "$ref": "#/definitions/predicate" }
+    },
+    "scales": {
+      "description": "Scale transform definitions.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/scale" }
+    },
+    "axes": {
+      "description": "Axis definitions.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/axis" }
+    },
+    "legends": {
+      "description": "Legend definitions.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/legend" }
+    },
+    "marks": {
+      "description": "Graphical mark definitions.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/mark" }
+    }
+  },
+  "definitions": {
+    "signal-ref": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "signal" ],
+      "properties": {
+        "signal": {
+          "type": "string"
+        }
+      }
+    },
+    "data-ref": {
+      "description": "Scale domains may be defined directly as an array of values, or can be inferred from input data. In the latter case, the scale domain can be defined in Vega as an object we call a \"DataRef\" (for data reference).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "field" ],
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "field": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "group": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "array",
+              "items": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "offset": {
+      "description": "If a number, then the value is the offset, in pixels, by which to displace the axis from the edge of the enclosing group or data rectangle. The offset can also be specified as an object with scale and value properties in which scale refers to the name of a scale and value is a value in the domain of the scale. The resulting value will be a number in the range of the scale.",
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scale": {
+              "type": "string"
+            },
+            "value": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "number" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "A unique name for the data set.",
+          "type": "string"
+        },
+        "modify": {
+          "type": "array",
+          "items": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "signal": {
+                  "type": "string"
+                },
+                "predicate": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "format": {
+          "description": "An object that specifies the format for the data file, if loaded from a URL. The currently supported formats are json (JavaScript Object Notation), csv (comma-separated values), tsv (tab-separated values), topojson, and treejson. These options are specified by the type property of the format object. For other parameters, see the Formats documentation below.",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { }
+        },
+        "values": {
+          "description": "The actual data set to use. The values property allows data to be inlined directly within the specification itself.",
+          "oneOf": [
+            {
+              "type": "array"
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "source": {
+          "description": "The name of another data set to use as the source for this data set. The source property is particularly useful in combination with a transform pipeline to derive new data.",
+          "type": "string"
+        },
+        "url": {
+          "description": "A URL from which to load the data set. Use the format property to ensure the loaded data is correctly parsed. If the format property is not specified, the data is assumed to be in a row-oriented JSON format.",
+          "type": "string"
+        },
+        "transform": {
+          "description": "An array of transforms to perform on the data. Transform operators will be run on the default data, as provided by late-binding or as specified by the source, values, or url properties. See the Data Transforms documentation for more details.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/transform"
+          }
+        }
+      }
+    },
+    "transform": {
+      "description": "A data transform performs operations on a data set prior to visualization. Common examples include filtering and grouping (e.g., group data points with the same stock ticker for plotting as separate lines). Other examples include layout functions (e.g., stream graphs, treemaps, graph layout) that are run prior to mark encoding.",
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "interactor": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "name" ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "stream": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "expr": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "scale": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "item": {
+          "description": "Documentation forthcoming",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { }
+        },
+        "invert": {
+          "description": "Documentation forthcoming",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "signal": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "expr": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "init": {
+          "description": "Documentation forthcoming",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            }
+          ]
+        },
+        "streams": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": [
+            { "$ref": "#/definitions/stream" }
+          ]
+        }
+      }
+    },
+    "predicate": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "scale": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "data": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "field": {
+          "description": "Documentation forthcoming",
+          "type": "string"
+        },
+        "type": {
+          "description": "Documentation forthcoming",
+          "type": "string",
+          "enum": [ "=", "==", "!=", ">", ">=", "<", "<=", "and", "&&", "or", "||", "in" ]
+        },
+        "operands": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "predicate": {
+                "description": "Documentation forthcoming",
+                "type": "string"
+              },
+              "signal": {
+                "description": "Documentation forthcoming",
+                "type": "string"
+              },
+              "arg": {
+                "description": "Documentation forthcoming",
+                "oneOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "value": {
+                "description": "Documentation forthcoming",
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "item": {
+          "description": "Documentation forthcoming",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { }
+        },
+        "range": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": { }
+          }
+        },
+        "scale": {
+          "description": "Documentation forthcoming",
+          "type": "object",
+          "additionalProperties": true,
+          "properties": { }
+        }
+      }
+    },
+    "scale": {
+      "description": "Scales are functions that transform a domain of data values (numbers, dates, strings, etc) to a range of visual values (pixels, colors, sizes). A scale function takes a single data value as input and returns a visual value. Vega includes different types of scales for quantitative data or ordinal/categorical data.",
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/ordinal-scale" },
+        { "$ref": "#/definitions/time-scale" },
+        { "$ref": "#/definitions/quantitative-scale" }
+      ]
+    },
+    "common-scale": {
+      "properties": {
+        "name": {
+          "description": "A unique name for the scale.",
+          "type": "string"
+        },
+        "domain": {
+          "description": "The domain of the scale, representing the set of data values. For quantitative data, this can take the form of a two-element array with minimum and maximum values. For ordinal/categorical data, this may be an array of valid input values. The domain may also be specified by a reference to a data source.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "domainMin": {
+          "description": "For quantitative scales only, sets the minimum value in the scale domain. domainMin can be used to override, or (with domainMax) used in lieu of, the domain property.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            },
+            {
+              "$ref": "#/definitions/signal-ref"
+            }
+          ]
+        },
+        "domainMax": {
+          "description": "For quantitative scales only, sets the maximum value in the scale domain. domainMax can be used to override, or (with domainMin) used in lieu of, the domain property.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            },
+            {
+              "$ref": "#/definitions/signal-ref"
+            }
+          ]
+        },
+        "range": {
+          "description": "The range of the scale, representing the set of visual values. For numeric values, the range can take the form of a two-element array with minimum and maximum values. For ordinal or quantized data, the range may by an array of desired output values, which are mapped to elements in the specified domain. See the section on range literals below for more options. For ordinal scales only, the range can be defined using a DataRef: the range values are then drawn dynamically from a backing data set.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "string",
+              "enum": ["width", "height", "shapes", "category10", "category20"]
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "rangeMin": {
+          "description": "Sets the minimum value in the scale range. rangeMin can be used to override, or (with rangeMax) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "rangeMax": {
+          "description": "Sets the maximum value in the scale range. rangeMax can be used to override, or (with rangeMin) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "reverse": {
+          "description": "If true, flips the scale range.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            }
+          ]
+        },
+        "round": {
+          "description": "If true, rounds numeric output values to integers. This can be helpful for snapping to the pixel grid.",
+          "type": "boolean"
+        },
+        "data": {
+          "description": "The name of the data set containing domain values.",
+          "type": "string"
+        },
+        "field": {
+          "description": "A reference to the desired data field(s) (e.g., \"data.price\"). An array of fields will include values for all referenced fields. Typically string values are used to indicate the field to lookup. However, one can specify an indirect lookup of the field name using an object parameter of the form {\"group\": \"data.f\"}. In this case, the value of the field data.f is first retrieved from the enclosing group's data, and then used as the field name for the current data set. In other words, you can determine the field name dynamically from your data.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            },
+            {
+              "type": "array"
+            }
+          ]
+        }
+      }
+    },
+    "ordinal-scale": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-scale" }
+      ],
+      "properties": {
+        "type": {
+          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
+          "type": "string",
+          "enum": ["ordinal"]
+        },
+        "points": {
+          "description": "If true, distributes the ordinal values over a quantitative range at uniformly spaced points. The spacing of the points can be adjusted using the padding property. If false, the ordinal scale will construct evenly-spaced bands, rather than points.",
+          "type": "boolean"
+        },
+        "padding": {
+          "description": "Applies spacing among ordinal elements in the scale range. The actual effect depends on how the scale is configured. If the points parameter is true, the padding value is interpreted as a multiple of the spacing between points. A reasonable value is 1.0, such that the first and last point will be offset from the minimum and maximum value by half the distance between points. Otherwise, padding is typically in the range [0, 1] and corresponds to the fraction of space in the range interval to allocate to padding. A value of 0.5 means that the range band width will be equal to the padding width. For more, see the D3 ordinal scale documentation.",
+          "type": "number"
+        },
+        "sort": {
+          "description": "If true, the values in the scale domain will be sorted according to their natural order. The default value is false.",
+          "type": "boolean"
+        }
+      }
+    },
+    "time-scale": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-scale" }
+      ],
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
+          "type": "string",
+          "enum": ["time", "utc"]
+        },
+        "clamp": {
+          "description": "If true, values that exceed the data domain are clamped to either the minimum or maximum range value.",
+          "type": "boolean"
+        },
+        "nice": {
+          "description": "If specified, modifies the scale domain to use a more human-friendly value range. For time and utc scale types only, the nice value should be a string indicating the desired time interval.",
+          "type": "string",
+          "enum": ["second", "minute", "hour", "day", "week", "month", "year"]
+        }
+      }
+    },
+    "quantitative-scale": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-scale" }
+      ],
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
+          "type": "string",
+          "enum": ["linear", "log", "pow", "sqrt", "quantile", "quantize", "threshold"]
+        },
+        "clamp": {
+          "description": "If true, values that exceed the data domain are clamped to either the minimum or maximum range value.",
+          "type": "boolean"
+        },
+        "exponent": {
+          "description": "Sets the exponent of the scale transformation. For pow scale types only, otherwise ignored.",
+          "type": "number"
+        },
+        "nice": {
+          "description": "If true, modifies the scale domain to use a more human-friendly number range (e.g., 7 instead of 6.96).",
+          "type": "boolean"
+        },
+        "zero": {
+          "description": "If true, ensures that a zero baseline value is included in the scale domain. This option is ignored for non-quantitative scales.",
+          "type": "boolean"
+        }
+      }
+    },
+    "mark": {
+      "description": "Marks are the basic visual building block of a visualization. Similar to other mark-based frameworks such as Protovis, marks provide basic shapes whose properties can be set according to backing data. Mark properties can be simple constants or data fields, and Scales can be used to map from data to property values. The basic supported mark types are rectangles (rect), plotting symbols (symbol), general paths or polygons (path), circular arcs (arc), filled areas (area), lines (line), images (image) and text labels (text).",
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/visual-mark" },
+        { "$ref": "#/definitions/interactor-mark" },
+        { "$ref": "#/definitions/group-mark" }
+      ],
+      "properties": {
+        "interactive": {
+          "type": "boolean"
+        },
+        "name": {
+          "description": "A unique name for the mark instance. As of Vega v1.4.0, the SVG renderer adds the unaltered name value as CSS class names on the enclosing SVG group (g) element for mark instances.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of this mark. Can be used as a comment.",
+          "type": "string"
+        },
+        "from": {
+          "description": "An object describing the data this mark set should visualize. The supported properties are data (the name of the data set to use) and transform (to provide an array of data transformations to apply). If the data property is not defined, the mark will attempt to inherit data from its parent group mark, if any. Otherwise, a default, single element data set is assumed.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "data": {
+              "type": "string"
+            },
+            "mark": {
+              "type": "string"
+            },
+            "transform": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/transform"
+              }
+            }
+          }
+        },
+        "properties": {
+          "description": "An object containing the property set definitions.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enter": {
+              "description": "Enter properties are evaluated when data is processed for the first time and a mark instance is newly added to a scene.",
+              "$ref": "#/definitions/mark-prop"
+            },
+            "exit": {
+              "description": "Exit properties are evaluated when the data backing a mark is removed, and so the mark is leaving the visual scene.",
+              "$ref": "#/definitions/mark-prop"
+            },
+            "update": {
+              "description": "Update properties are evaluated for all existing (non-exiting) mark instances.",
+              "$ref": "#/definitions/mark-prop"
+            },
+            "hover": {
+              "description": "Hover set determines visual properties when the mouse cursor hovers over a mark instance. Upon mouse out, the update set is applied.",
+              "$ref": "#/definitions/mark-prop"
+            }
+          }
+        },
+        "key": {
+          "description": "A data field to use as a unique key for data binding. When a visualization's data is updated, the key value will be used to match data elements to existing mark instances. Use a key field to enable object constancy for transitions over dynamic data. If no key value is provided, the index in the data array is instead used to match data to mark instances.",
+          "type": "string"
+        },
+        "delay": {
+          "description": "The transition delay, in milliseconds, for mark updates. The delay can be set in conjunction with the backing data (possibly through a scale transform) to provide staggered animations.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "ease": {
+          "description": "The transition easing function for mark updates. The supported easing types are linear, quad, cubic, sin, exp, circle, and bounce, plus the modifiers in, out, in-out, and out-in. The default is cubic-in-out. For more details please see the D3 ease function documentation.",
+          "type": "string",
+          "enum": [ "linear", "quad", "cubic", "sin", "exp", "circle", "bounce", "linear-in", "quad-in", "cubic-in", "sin-in", "exp-in", "circle-in", "bounce-in", "linear-out", "quad-out", "cubic-out", "sin-out", "exp-out", "circle-out", "bounce-out", "linear-in-out", "quad-in-out", "cubic-in-out", "sin-in-out", "exp-in-out", "circle-in-out", "bounce-in-out", "linear-out-in", "quad-out-in", "cubic-out-in", "sin-out-in", "exp-out-in", "circle-out-in", "bounce-out-in" ]
+        }
+      }
+    },
+    "interactor-mark": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "description": "The mark type (rect, path, arc, etc.)",
+          "type": "string",
+          "enum": ["brush_brush_rect"]
+        }
+      }
+    },
+    "visual-mark": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "type" ],
+      "properties": {
+        "type": {
+          "description": "The mark type (rect, path, arc, etc.)",
+          "type": "string",
+          "enum": ["rect", "symbol", "path", "arc", "area", "line", "image", "text", "rule"]
+        }
+      }
+    },
+    "group-mark": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "type", "marks" ],
+      "properties": {
+        "type": {
+          "description": "The mark type (rect, path, arc, etc.)",
+          "type": "string",
+          "enum": ["group"]
+        },
+        "scales": {
+          "description": "Scales.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/scale" }
+        },
+        "axes": {
+          "description": "Axis definitions.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/axis" }
+        },
+        "legends": {
+          "description": "Legend definitions.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/legend" }
+        },
+        "marks": {
+          "description": "Graphical mark definitions.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/mark" }
+        }
+      }
+    },
+    "common-value-ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "field": {
+          "description": "A field (property) from which to pull a data value. The corresponding data set is determined by the mark's from property. Dot notation (\"data.price\") is used to access nested properties; if a dot character is actually part of the property name, you must escape the dot with a backslash: \"some\\.field\". If the field property is an object, then the field value will be determined indirectly. The object must have a \"group\" property, this references the parent group's data rather than the current marks' data. For example {\"group\": \"data.f\"} will use the value of the data.f field on the group's data as the field name to lookup on the current mark's data.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["group"],
+              "properties": {
+                "group": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "group": {
+          "description": "Similar to field, but references a property of the enclosing group's data, not the current mark. If \"width\" or \"height\" are specified, the width or height of the enclosing group mark is returned. Otherwise, the given named property will be retrieved from the the group mark's backing data element. Advanced Use: If both the group and field parameters are specified (or group is set to true), then a double lookup will occur: first the field value will be retrieved, it will then be used as a property name to look up on the data object specified by the group parameter.",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["width", "height"]
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "scale": {
+          "description": "The name of a scale transform to apply. If the input is an object, it indicates a field value from which to dynamically lookup the scale name. For example {\"field\": \"data.s\"} will use the value of data.s on the current mark's data as the scale name, whereas {\"group\": \"data.t\"} will use the value of data.t on the current group's data as the scale name.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            }
+          ]
+        }
+      }
+    },
+    "number-value-ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-value-ref" }
+      ],
+      "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["auto"]
+            }
+          ]
+        },
+        "signal": {
+          "type": "string"
+        },
+        "mult": {
+          "description": "A multiplier for the value, equivalent to (mult * value). Multipliers are applied after any scale transformation.",
+          "type": "number"
+        },
+        "offset": {
+          "description": "A simple additive offset to bias the final value, equivalent to (value + offset). Offsets are added after any scale transformation and multipliers.",
+          "type": "number"
+        },
+        "band": {
+          "description": "If true, and scale is specified, uses the range band of the scale as the retrieved value. This option is useful for determining widths with an ordinal scale.",
+          "type": "boolean"
+        }
+      }
+    },
+    "string-value-ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-value-ref" }
+      ],
+      "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "type": "string"
+        },
+        "band": {
+          "description": "If true, and scale is specified, uses the range band of the scale as the retrieved value. This option is useful for determining widths with an ordinal scale.",
+          "type": "boolean"
+        }
+      }
+    },
+    "boolean-value-ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-value-ref" }
+      ],
+      "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "type": "boolean"
+        }
+      }
+    },
+    "array-value-ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "color-value-ref": {
+      "type": "object",
+      "additionalProperties": true,
+      "oneOf": [
+        { "$ref": "#/definitions/common-value-ref" }
+      ],
+      "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            }
+          ]
+        }
+      }
+    },
+    "mark-prop": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "class": {
+          "description": "Documentation forthcoming",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "clip": {
+          "description": "Documentation forthcoming",
+          "$ref": "#/definitions/boolean-value-ref"
+        },
+        "x": {
+          "description": "The first (typically left-most) x-coordinate.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "x2": {
+          "description": "The second (typically right-most) x-coordinate.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "width": {
+          "description": "The width of the mark (if supported).",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "y": {
+          "description": "The first (typically top-most) y-coordinate.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "y2": {
+          "description": "The second (typically bottom-most) y-coordinate.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "height": {
+          "description": "The height of the mark (if supported).",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "opacity": {
+          "description": "The overall opacity.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "fill": {
+          "description": "The fill color.",
+          "$ref": "#/definitions/color-value-ref"
+        },
+        "fillOpacity": {
+          "description": "The fill opacity.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "stroke": {
+          "description": "The stroke color.",
+          "$ref": "#/definitions/color-value-ref"
+        },
+        "strokeWidth": {
+          "description": "The stroke width, in pixels.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "strokeOpacity": {
+          "description": "The stroke opacity.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "strokeDash": {
+          "description": "An array of alternating stroke, space lengths for creating dashed or dotted lines.",
+          "$ref": "#/definitions/array-value-ref"
+        },
+        "strokeDashOffset": {
+          "description": "The offset (in pixels) into which to begin drawing with the stroke dash array.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "size": {
+          "description": "The pixel area of the symbol. For example: in the case of circles, the radius is determined in part by the square root of the size value.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "shape": {
+          "description": "The symbol shape to use. One of circle (default), square, cross, diamond, triangle-up, or triangle-down",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "path": {
+          "description": "A path definition in the form of an SVG Path string.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "innerRadius": {
+          "description": "The inner radius of the arc, in pixels.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "outerRadius": {
+          "description": "The outer radius of the arc, in pixels.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "startAngle": {
+          "description": "The start angle of the arc, in radians. A value of 0 indicates up or \"north\", increasing values proceed clockwise.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "endAngle": {
+          "description": "The end angle of the arc, in radians. A value of 0 indicates up or \"north\", increasing values proceed clockwise.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "interpolate": {
+          "description": "The line interpolation method to use. One of linear, step-before, step-after, basis, basis-open, cardinal, cardinal-open, monotone.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "tension": {
+          "description": "Depending on the interpolation type, sets the tension parameter.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "interpolate": {
+          "description": "The line interpolation method to use. One of linear, step-before, step-after, basis, basis-open, basis-closed, bundle, cardinal, cardinal-open, cardinal-closed, monotone.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "tension": {
+          "description": "Depending on the interpolation type, sets the tension parameter.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "url": {
+          "description": "The URL from which to retrieve the image.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "align": {
+          "description": "The horizontal alignment of the image. One of left, right, center.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "baseline": {
+          "description": "The vertical alignment of the image. One of top, middle, bottom.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "text": {
+          "description": "The text to display.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "align": {
+          "description": "The horizontal alignment of the text. One of left, right, center.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "baseline": {
+          "description": "The vertical alignment of the text. One of top, middle, bottom.",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "dx": {
+          "description": "The horizontal margin, in pixels, between the text label and its anchor point. The value is ignored if the align property is center.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "dy": {
+          "description": "The vertical margin, in pixels, between the text label and its anchor point. The value is ignored if the baseline property is middle.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "radius": {
+          "description": "Polar coordinate radial offset, in pixels, of the text label from the origin determined by the x and y properties.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "theta": {
+          "description": "Polar coordinate angle, in radians, of the text label from the origin determined by the x and y properties. Values for theta follow the same convention of arc mark startAngle and endAngle properties: angles are measured in radians, with 0 indicating \"north\".",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "angle": {
+          "description": "The rotation angle of the text, in degrees.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "font": {
+          "description": "The typeface to set the text in (e.g., Helvetica Neue).",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "fontSize": {
+          "description": "The font size, in pixels.",
+          "$ref": "#/definitions/number-value-ref"
+        },
+        "fontWeight": {
+          "description": "The font weight (e.g., bold).",
+          "$ref": "#/definitions/string-value-ref"
+        },
+        "fontStyle": {
+          "description": "The font style (e.g., italic).",
+          "$ref": "#/definitions/string-value-ref"
+        }
+      }
+    },
+    "axis": {
+      "description": "Axes provide axis lines, ticks and labels to convey how a spatial range represents a data range. Simply put, axes visualize scales. Vega currently supports axes for Cartesian (rectangular) coordinates. Future versions may introduce support for polar (circular) coordinates. Similar to scales, axes can be defined either at the top-level visualization, or as part of a group mark.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "The type of axis. One of x or y.",
+          "type": "string",
+          "enum": ["x", "y"]
+        },
+        "scale": {
+          "description": "The name of the scale backing the axis component.",
+          "type": "string"
+        },
+        "orient": {
+          "description": "The orientation of the axis. One of top, bottom, left or right. The orientation can be used to further specialize the axis type (e.g., a y axis oriented for the right edge of the chart).",
+          "type": "string",
+          "enum": ["top", "bottom", "left", "right"]
+        },
+        "title": {
+          "description": "A title for the axis (none by default).",
+          "type": "string"
+        },
+        "titleOffset": {
+          "description": "The offset (in pixels) from the axis at which to place the title.",
+          "type": "number"
+        },
+        "tickPadding": {
+          "description": "Documentation forthcoming",
+          "type": "number"
+        },
+        "format": {
+          "description": "The formatting pattern for axis labels. Vega uses D3's format pattern.",
+          "type": "string"
+        },
+        "ticks": {
+          "description": "A desired number of ticks. The resulting number may be different so that values are \"nice\" (multiples of 2, 5, 10) and lie within the underlying scale's range.",
+          "type": "number"
+        },
+        "values": {
+          "description": "Explicitly set the visible axis tick values.",
+          "type": "array"
+        },
+        "tickSize": {
+          "description": "The size, in pixels, of major, minor and end ticks.",
+          "type": "number"
+        },
+        "tickSizeMajor": {
+          "description": "The size, in pixels, of major ticks.",
+          "type": "number"
+        },
+        "tickSizeMinor": {
+          "description": "The size, in pixels, of minor ticks.",
+          "type": "number"
+        },
+        "tickSizeEnd": {
+          "description": "The size, in pixels, of end ticks.",
+          "type": "number"
+        },
+        "offset": {
+          "$ref": "#/definitions/offset"
+        },
+        "layer": {
+          "description": "A string indicating if the axis (and any gridlines) should be placed above or below the data marks. One of \"front\" (default) or \"back\".",
+          "type": "string",
+          "enum": ["front", "back"]
+        },
+        "grid": {
+          "description": "A flag indicate if gridlines should be created in addition to ticks.",
+          "type": "boolean"
+        },
+        "properties": {
+          "description": "Mark property definitions for custom axis styling. The input object can include sub-objects for ticks (both major and minor), majorTicks, minorTicks, labels and axis (for the axis line).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ticks": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "majorTicks": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "minorTicks": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "labels": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "grid": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "axis": {
+              "$ref": "#/definitions/mark-prop"
+            }
+          }
+        }
+      }
+    },
+    "legend": {
+      "description": "Similar to axes, legends visualize scales. However, whereas axes aid interpretation of scales with spatial ranges, legends aid interpretation of scales with ranges such as colors, shapes and sizes. Similar to scales and axes, legends can be defined either at the top-level visualization, or as part of a group mark.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": {
+          "description": "The name of the scale that determines an item's size.",
+          "type": "string"
+        },
+        "offset": {
+          "$ref": "#/definitions/offset"
+        },
+        "shape": {
+          "description": "The name of the scale that determines an item's shape.",
+          "type": "string"
+        },
+        "fill": {
+          "description": "The name of the scale that determines an item's fill color.",
+          "type": "string"
+        },
+        "stroke": {
+          "description": "The name of the scale that determines an item's stroke color.",
+          "type": "string"
+        },
+        "orient": {
+          "description": "The orientation of the legend. One of \"left\" or \"right\". This determines how the legend is positioned within the scene. The default is \"right\".",
+          "type": "string",
+          "enum": ["left", "right"]
+        },
+        "title": {
+          "description": "The title for the legend (none by default).",
+          "type": "string"
+        },
+        "format": {
+          "description": "A formatting pattern for legend labels. Vega uses D3's format pattern.",
+          "type": "string"
+        },
+        "values": {
+          "description": "Explicitly set the visible legend values.",
+          "type": "array"
+        },
+        "properties": {
+          "description": "Mark property definitions for custom legend styling. The input object can include sub-objects for title, labels, symbols (for discrete legend items), gradient (for a continuous color gradient) and legend (for the overall legend group).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "labels": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "symbols": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "gradient": {
+              "$ref": "#/definitions/mark-prop"
+            },
+            "legend": {
+              "$ref": "#/definitions/mark-prop"
+            }
+          }
+        }
+      }
+    }
+  }
+}
