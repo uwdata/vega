@@ -933,7 +933,10 @@
     },
     "mark-prop": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      },
       "properties": {
         "class": {
           "description": "Documentation forthcoming",

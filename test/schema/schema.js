@@ -7,7 +7,7 @@ describe('Schema', function() {
   var validator = new zs({
     noExtraKeywords: true,
     assumeAdditional: false,
-    forceProperties: true
+    forceProperties: false
   });
 
   describe('Examples', function() {
