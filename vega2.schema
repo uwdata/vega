@@ -112,6 +112,62 @@
         }
       }
     },
+    "scale-ref": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "description": "Documentation forthcoming",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "arg": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "scope": {
+          "description": "Documentation forthcoming",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "invert": {
+          "description": "Documentation forthcoming",
+          "type": "boolean"
+        }
+      }
+    },
+    "field-ref": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "type": "string"
+        },
+        "parent": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/definitions/field-ref" }
+          ]
+        },
+        "datum": {
+          "oneOf": [
+            { "type": "string" },
+            { "$ref": "#/definitions/field-ref" }
+          ]
+        }
+      }
+    },
     "data-ref": {
       "description": "Scale domains may be defined directly as an array of values, or can be inferred from input data. In the latter case, the scale domain can be defined in Vega as an object we call a \"DataRef\" (for data reference).",
       "type": "object",
@@ -127,6 +183,9 @@
               "type": "string"
             },
             {
+              "$ref": "#/definitions/field-ref"
+            },
+            {
               "type": "array",
               "items": [
                 {
@@ -135,25 +194,10 @@
               ]
             },
             {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "group": {
-                  "type": "string"
-                }
-              }
-            },
-            {
               "type": "array",
               "items": [
                 {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "group": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/definitions/field-ref"
                 }
               ]
             }
@@ -289,8 +333,14 @@
           "type": "string"
         },
         "scale": {
-          "description": "Documentation forthcoming",
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+            "$ref": "#/definitions/scale-ref"
+            }
+          ]
         },
         "item": {
           "description": "Documentation forthcoming",
@@ -362,8 +412,7 @@
           "type": "string"
         },
         "scale": {
-          "description": "Documentation forthcoming",
-          "type": "string"
+          "$ref": "#/definitions/scale-ref"
         },
         "data": {
           "description": "Documentation forthcoming",
@@ -792,14 +841,7 @@
               "type": "string"
             },
             {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["group"],
-              "properties": {
-                "group": {
-                  "type": "string"
-                }
-              }
+              "$ref": "#/definitions/field-ref"
             }
           ]
         },
