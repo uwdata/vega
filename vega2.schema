@@ -263,7 +263,7 @@
           "description": "An object that specifies the format for the data file, if loaded from a URL. The currently supported formats are json (JavaScript Object Notation), csv (comma-separated values), tsv (tab-separated values), topojson, and treejson. These options are specified by the type property of the format object. For other parameters, see the Formats documentation below.",
           "type": "object",
           "additionalProperties": true,
-          "properties": { }
+          "properties": {}
         },
         "values": {
           "description": "The actual data set to use. The values property allows data to be inlined directly within the specification itself.",
@@ -586,9 +586,7 @@
               "type": "boolean"
             },
             {
-              "type": "object",
-              "additionalProperties": true,
-              "properties": { }
+              "$ref": "#/definitions/data-ref"
             }
           ]
         },
