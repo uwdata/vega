@@ -11,11 +11,13 @@
     },
     "width": {
       "description": "The total width, in pixels, of the data rectangle.",
-      "type": "number"
+      "type": "number",
+      "default": 500
     },
     "height": {
       "description": "The total height, in pixels, of the data rectangle.",
-      "type": "number"
+      "type": "number",
+      "default": 500
     },
     "viewport": {
       "description": "The width and height of the on-screen viewport, in pixels. If necessary, clipping and scrolling will be applied.",
@@ -55,7 +57,8 @@
             }
           }
         }
-      ]
+      ],
+      "default": "strict"
     },
     "data": {
       "description": "Definitions of data to visualize.",
@@ -635,7 +638,8 @@
         },
         "sort": {
           "description": "If true, the values in the scale domain will be sorted according to their natural order. The default value is false.",
-          "type": "boolean"
+          "type": "boolean",
+          "default": false
         }
       }
     },
@@ -768,7 +772,8 @@
         "ease": {
           "description": "The transition easing function for mark updates. The supported easing types are linear, quad, cubic, sin, exp, circle, and bounce, plus the modifiers in, out, in-out, and out-in. The default is cubic-in-out. For more details please see the D3 ease function documentation.",
           "type": "string",
-          "enum": [ "linear", "quad", "cubic", "sin", "exp", "circle", "bounce", "linear-in", "quad-in", "cubic-in", "sin-in", "exp-in", "circle-in", "bounce-in", "linear-out", "quad-out", "cubic-out", "sin-out", "exp-out", "circle-out", "bounce-out", "linear-in-out", "quad-in-out", "cubic-in-out", "sin-in-out", "exp-in-out", "circle-in-out", "bounce-in-out", "linear-out-in", "quad-out-in", "cubic-out-in", "sin-out-in", "exp-out-in", "circle-out-in", "bounce-out-in" ]
+          "enum": [ "linear", "quad", "cubic", "sin", "exp", "circle", "bounce", "linear-in", "quad-in", "cubic-in", "sin-in", "exp-in", "circle-in", "bounce-in", "linear-out", "quad-out", "cubic-out", "sin-out", "exp-out", "circle-out", "bounce-out", "linear-in-out", "quad-in-out", "cubic-in-out", "sin-in-out", "exp-in-out", "circle-in-out", "bounce-in-out", "linear-out-in", "quad-out-in", "cubic-out-in", "sin-out-in", "exp-out-in", "circle-out-in", "bounce-out-in" ],
+          "default": "cubic-in-out"
         }
       }
     },
@@ -1048,7 +1053,9 @@
         },
         "shape": {
           "description": "The symbol shape to use. One of circle (default), square, cross, diamond, triangle-up, or triangle-down",
-          "$ref": "#/definitions/string-value-ref"
+          "$ref": "#/definitions/string-value-ref",
+          "default": "circle",
+          "default": "circle"
         },
         "path": {
           "description": "A path definition in the form of an SVG Path string.",
@@ -1213,7 +1220,8 @@
         "layer": {
           "description": "A string indicating if the axis (and any gridlines) should be placed above or below the data marks. One of \"front\" (default) or \"back\".",
           "type": "string",
-          "enum": ["front", "back"]
+          "enum": ["front", "back"],
+          "default": "front"
         },
         "grid": {
           "description": "A flag indicate if gridlines should be created in addition to ticks.",
@@ -1273,7 +1281,8 @@
         "orient": {
           "description": "The orientation of the legend. One of \"left\" or \"right\". This determines how the legend is positioned within the scene. The default is \"right\".",
           "type": "string",
-          "enum": ["left", "right"]
+          "enum": ["left", "right"],
+          "default": "right"
         },
         "title": {
           "description": "The title for the legend (none by default).",
