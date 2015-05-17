@@ -219,7 +219,7 @@
           "additionalProperties": false,
           "properties": {
             "scale": {
-              "type": "string"
+              "$ref": "#/definitions/scale-name"
             },
             "value": {
               "oneOf": [
@@ -338,10 +338,10 @@
         "scale": {
           "oneOf": [
             {
-              "type": "string"
+              "$ref": "#/definitions/scale-name"
             },
             {
-            "$ref": "#/definitions/scale-ref"
+              "$ref": "#/definitions/scale-ref"
             }
           ]
         },
@@ -485,6 +485,10 @@
           "properties": { }
         }
       }
+    },
+    "scale-name": {
+      "description": "A unique scale name",
+      "type": "string"
     },
     "scale": {
       "description": "Scales are functions that transform a domain of data values (numbers, dates, strings, etc) to a range of visual values (pixels, colors, sizes). A scale function takes a single data value as input and returns a visual value. Vega includes different types of scales for quantitative data or ordinal/categorical data.",
@@ -797,7 +801,8 @@
         "type": {
           "description": "The mark type (rect, path, arc, etc.)",
           "type": "string",
-          "enum": ["rect", "symbol", "path", "arc", "area", "line", "image", "text", "rule"]
+          "enum": ["rect", "symbol", "path", "arc", "area", "line", "image", "text", "rule"],
+          "default": "rect"
         }
       }
     },
@@ -864,7 +869,7 @@
           "description": "The name of a scale transform to apply. If the input is an object, it indicates a field value from which to dynamically lookup the scale name. For example {\"field\": \"data.s\"} will use the value of data.s on the current mark's data as the scale name, whereas {\"group\": \"data.t\"} will use the value of data.t on the current group's data as the scale name.",
           "oneOf": [
             {
-              "type": "string"
+              "$ref": "#/definitions/scale-name"
             },
             {
               "type": "object",
@@ -1167,7 +1172,7 @@
         },
         "scale": {
           "description": "The name of the scale backing the axis component.",
-          "type": "string"
+          "$ref": "#/definitions/scale-name"
         },
         "orient": {
           "description": "The orientation of the axis. One of top, bottom, left or right. The orientation can be used to further specialize the axis type (e.g., a y axis oriented for the right edge of the chart).",
