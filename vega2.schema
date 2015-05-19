@@ -123,25 +123,10 @@
       "properties": {
         "name": {
           "description": "Documentation forthcoming",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "arg": {
-                  "type": "string"
-                }
-              }
-            }
-          ]
+          "type": "string"
         },
         "scope": {
-          "description": "Documentation forthcoming",
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/definitions/scope-ref"
         },
         "invert": {
           "description": "Documentation forthcoming",
@@ -190,19 +175,11 @@
             },
             {
               "type": "array",
-              "items": [
-                {
-                  "type": "string"
-                }
-              ]
+              "items": { "type": "string" }
             },
             {
               "type": "array",
-              "items": [
-                {
-                  "$ref": "#/definitions/field-ref"
-                }
-              ]
+              "items": { "$ref": "#/definitions/field-ref" }
             }
           ]
         }
@@ -241,26 +218,24 @@
         },
         "modify": {
           "type": "array",
-          "items": [
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "type": {
-                  "type": "string"
-                },
-                "signal": {
-                  "type": "string"
-                },
-                "predicate": {
-                  "type": "string"
-                },
-                "field": {
-                  "type": "string"
-                }
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "signal": {
+                "type": "string"
+              },
+              "predicate": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
               }
             }
-          ]
+          }
         },
         "format": {
           "description": "An object that specifies the format for the data file, if loaded from a URL. The currently supported formats are json (JavaScript Object Notation), csv (comma-separated values), tsv (tab-separated values), topojson, and treejson. These options are specified by the type property of the format object. For other parameters, see the Formats documentation below.",
@@ -346,10 +321,7 @@
           ]
         },
         "item": {
-          "description": "Documentation forthcoming",
-          "type": "object",
-          "additionalProperties": true,
-          "properties": { }
+          "$ref": "#/definitions/item-ref"
         },
         "invert": {
           "description": "Documentation forthcoming",
@@ -399,9 +371,7 @@
         "streams": {
           "description": "Documentation forthcoming",
           "type": "array",
-          "items": [
-            { "$ref": "#/definitions/stream" }
-          ]
+          "items": { "$ref": "#/definitions/stream" }
         }
       }
     },
@@ -464,25 +434,30 @@
           }
         },
         "item": {
-          "description": "Documentation forthcoming",
-          "type": "object",
-          "additionalProperties": true,
-          "properties": { }
+          "$ref": "#/definitions/item-ref"
         },
         "range": {
           "description": "Documentation forthcoming",
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": true,
-            "properties": { }
+            "additionalProperties": false,
+            "properties": {
+              "signal": {
+                "type": "string"
+              }
+            }
           }
         },
         "scale": {
           "description": "Documentation forthcoming",
           "type": "object",
-          "additionalProperties": true,
-          "properties": { }
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "invert": { "type": "boolean" },
+            "scope": { "$ref": "#/definitions/scope-ref" }
+          }
         }
       }
     },
@@ -501,6 +476,7 @@
       ]
     },
     "common-scale": {
+      "type": "object",
       "properties": {
         "name": {
           "description": "A unique name for the scale.",
@@ -855,13 +831,19 @@
         },
         "group": {
           "description": "Similar to field, but references a property of the enclosing group's data, not the current mark. If \"width\" or \"height\" are specified, the width or height of the enclosing group mark is returned. Otherwise, the given named property will be retrieved from the the group mark's backing data element. Advanced Use: If both the group and field parameters are specified (or group is set to true), then a double lookup will occur: first the field value will be retrieved, it will then be used as a property name to look up on the data object specified by the group parameter.",
-          "oneOf": [
+          "anyOf": [
             {
+              "description": "Whether to reference group data",
+              "type": "boolean"
+            },
+            {
+              "description": "Group dimensions",
               "type": "string",
               "enum": ["width", "height"]
             },
             {
-              "type": "boolean"
+              "description": "Group field reference",
+              "type": "string"
             }
           ]
         },
@@ -873,8 +855,13 @@
             },
             {
               "type": "object",
-              "additionalProperties": true,
-              "properties": { }
+              "additionalProperties": false,
+              "required": [ "datum" ],
+              "properties": {
+                "datum": {
+                  "type": "string"
+                }
+              }
             }
           ]
         }
@@ -970,11 +957,13 @@
           "description": "A constant value. If field is specified, this value is ignored.",
           "oneOf": [
             {
+              "title": "CSS",
               "type": "string"
             },
             {
+              "title": "RGB",
               "type": "object",
-              "additionalProperties": true,
+              "additionalProperties": false,
               "properties": { }
             }
           ]
@@ -1322,6 +1311,28 @@
               "$ref": "#/definitions/mark-prop"
             }
           }
+        }
+      }
+    },
+    "item-ref": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "arg" ],
+      "properties": {
+        "arg": {
+          "type": "string"
+        }
+      }
+    },
+    "scope-ref": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "signal" ],
+      "properties": {
+        "signal": {
+          "type": "string"
         }
       }
     }
