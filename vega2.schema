@@ -32,13 +32,16 @@
       "description": "The internal padding, in pixels, from the edge of the visualization canvas to the data rectangle. If an object is provided, it must include {top, left, right, bottom} properties. Two string values are also acceptable: \"auto\" (the default) and \"strict\". Auto-padding computes the padding dynamically based on the contents of the visualization. All marks, including axes and legends, are used to compute the necessary padding. \"Strict\" auto-padding attempts to adjust the padding such that the overall width and height of the visualization is unchanged. This mode can cause the visualization's width and height parameters to be adjusted such that the total size, including padding, remains constant. Note that in some cases strict padding is not possible; for example, if the axis labels are much larger than the data rectangle.",
       "oneOf": [
         {
+          "title": "Auto",
           "type": "string",
           "enum": ["auto", "strict"]
         },
         {
+          "title": "Dimension",
           "type": "number"
         },
         {
+          "title": "Dimensions",
           "type": "object",
           "additionalProperties": false,
           "required": ["top", "bottom", "left", "right"],
@@ -126,7 +129,7 @@
           "type": "string"
         },
         "scope": {
-          "$ref": "#/definitions/scope-ref"
+          "$ref": "#/definitions/scope"
         },
         "invert": {
           "description": "Documentation forthcoming",
@@ -168,7 +171,7 @@
         "field": {
           "oneOf": [
             {
-              "type": "string"
+              "$ref": "#/definitions/field-name"
             },
             {
               "$ref": "#/definitions/field-ref"
@@ -199,10 +202,6 @@
               "$ref": "#/definitions/scale-name"
             },
             "value": {
-              "oneOf": [
-                { "type": "string" },
-                { "type": "number" }
-              ]
             }
           }
         }
@@ -211,6 +210,7 @@
     "data": {
       "type": "object",
       "additionalProperties": false,
+      "required": [ "name" ],
       "properties": {
         "name": {
           "description": "A unique name for the data set.",
@@ -240,8 +240,39 @@
         "format": {
           "description": "An object that specifies the format for the data file, if loaded from a URL. The currently supported formats are json (JavaScript Object Notation), csv (comma-separated values), tsv (tab-separated values), topojson, and treejson. These options are specified by the type property of the format object. For other parameters, see the Formats documentation below.",
           "type": "object",
-          "additionalProperties": true,
-          "properties": {}
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [ "json", "csv", "tsv", "topojson", "treejson" ],
+              "default": "json"
+            },
+            "parse": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "title": "Fields",
+                    "description": "Each instruction is a name-value pair, where the name is the name of the attribute, and the value is the desired data type (one of \"number\", \"boolean\" or \"date\"). For example, \"parse\": {\"y\":\"number\"} ensures that the y value in each row of the input data is parsed as a numerical value.",
+                    "type": "string",
+                    "enum": [ "number", "boolean", "date" ]
+                  },
+                  "properties": {
+                  }
+                },
+                {
+                  "type": "string",
+                  "enum": [ "auto" ]
+                }
+              ]
+            },
+            "property": {
+              "type": "string"
+            },
+            "feature": {
+              "type": "string"
+            }
+          }
         },
         "values": {
           "description": "The actual data set to use. The values property allows data to be inlined directly within the specification itself.",
@@ -350,23 +381,7 @@
           "type": "string"
         },
         "init": {
-          "description": "Documentation forthcoming",
-          "oneOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "object",
-              "additionalProperties": true,
-              "properties": { }
-            }
-          ]
+          "description": "Documentation forthcoming"
         },
         "streams": {
           "description": "Documentation forthcoming",
@@ -416,19 +431,10 @@
                 "type": "string"
               },
               "arg": {
-                "description": "Documentation forthcoming",
-                "oneOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
+                "description": "Documentation forthcoming"
               },
               "value": {
-                "description": "Documentation forthcoming",
-                "type": "boolean"
+                "description": "Documentation forthcoming"
               }
             }
           }
@@ -456,13 +462,17 @@
           "properties": {
             "name": { "type": "string" },
             "invert": { "type": "boolean" },
-            "scope": { "$ref": "#/definitions/scope-ref" }
+            "scope": { "$ref": "#/definitions/scope" }
           }
         }
       }
     },
     "scale-name": {
       "description": "A unique scale name",
+      "type": "string"
+    },
+    "field-name": {
+      "description": "A unique field name",
       "type": "string"
     },
     "scale": {
@@ -864,6 +874,13 @@
               }
             }
           ]
+        },
+        "rule": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
         }
       }
     },
@@ -1325,7 +1342,7 @@
         }
       }
     },
-    "scope-ref": {
+    "scope": {
       "description": "Documentation forthcoming",
       "type": "object",
       "additionalProperties": false,
@@ -1333,6 +1350,28 @@
       "properties": {
         "signal": {
           "type": "string"
+        }
+      }
+    },
+    "rule": {
+      "description": "Documentation forthcoming",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "predicate": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "scale": {
+          "$ref": "#/definitions/scale-name"
+        },
+        "field": {
+          "$ref": "#/definitions/field-name"
+        },
+        "value": {
         }
       }
     }
