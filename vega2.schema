@@ -90,6 +90,11 @@
       "type": "array",
       "items": { "$ref": "#/definitions/scale" }
     },
+    "marks": {
+      "description": "Graphical mark definitions.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/mark" }
+    },
     "axes": {
       "description": "Axis definitions.",
       "type": "array",
@@ -99,11 +104,6 @@
       "description": "Legend definitions.",
       "type": "array",
       "items": { "$ref": "#/definitions/legend" }
-    },
-    "marks": {
-      "description": "Graphical mark definitions.",
-      "type": "array",
-      "items": { "$ref": "#/definitions/mark" }
     }
   },
   "definitions": {
@@ -118,7 +118,7 @@
         }
       }
     },
-    "scale-ref": {
+    "scale-info": {
       "description": "Documentation forthcoming",
       "type": "object",
       "additionalProperties": false,
@@ -138,6 +138,19 @@
       }
     },
     "field-ref": {
+      "description": "A field (property) from which to pull a data value. The corresponding data set is determined by the mark's from property. Dot notation (\"data.price\") is used to access nested properties; if a dot character is actually part of the property name, you must escape the dot with a backslash: \"some\\.field\". If the field property is an object, then the field value will be determined indirectly. The object must have a \"group\" property, this references the parent group's data rather than the current marks' data. For example {\"group\": \"data.f\"} will use the value of the data.f field on the group's data as the field name to lookup on the current mark's data.",
+      "oneOf": [
+        {
+          "title": "Name",
+          "$ref": "#/definitions/field-name"
+        },
+        {
+          "title": "Fld",
+          "$ref": "#/definitions/field"
+        }
+      ]
+    },
+    "field": {
       "description": "Documentation forthcoming",
       "type": "object",
       "additionalProperties": false,
@@ -146,16 +159,10 @@
           "type": "string"
         },
         "parent": {
-          "oneOf": [
-            { "type": "string" },
-            { "$ref": "#/definitions/field-ref" }
-          ]
+          "$ref": "#/definitions/field-ref"
         },
         "datum": {
-          "oneOf": [
-            { "type": "string" },
-            { "$ref": "#/definitions/field-ref" }
-          ]
+          "$ref": "#/definitions/field-ref"
         }
       }
     },
@@ -166,21 +173,16 @@
       "required": [ "field" ],
       "properties": {
         "data": {
-          "type": "string"
+          "$ref": "#/definitions/data-name"
         },
         "field": {
           "oneOf": [
             {
-              "$ref": "#/definitions/field-name"
-            },
-            {
+              "title": "Field",
               "$ref": "#/definitions/field-ref"
             },
             {
-              "type": "array",
-              "items": { "type": "string" }
-            },
-            {
+              "title": "Fields",
               "type": "array",
               "items": { "$ref": "#/definitions/field-ref" }
             }
@@ -214,7 +216,7 @@
       "properties": {
         "name": {
           "description": "A unique name for the data set.",
-          "type": "string"
+          "$ref": "#/definitions/data-name"
         },
         "modify": {
           "type": "array",
@@ -347,7 +349,7 @@
               "$ref": "#/definitions/scale-name"
             },
             {
-              "$ref": "#/definitions/scale-ref"
+              "$ref": "#/definitions/scale-info"
             }
           ]
         },
@@ -400,11 +402,18 @@
           "type": "string"
         },
         "scale": {
-          "$ref": "#/definitions/scale-ref"
+          "oneOf": [
+            {
+              "$ref": "#/definitions/scale-name"
+            },
+            {
+              "$ref": "#/definitions/scale-info"
+            }
+          ]
         },
         "data": {
           "description": "Documentation forthcoming",
-          "type": "string"
+          "$ref": "#/definitions/data-name"
         },
         "field": {
           "description": "Documentation forthcoming",
@@ -475,19 +484,150 @@
       "description": "A unique field name",
       "type": "string"
     },
+    "data-name": {
+      "description": "A unique data set name",
+      "type": "string"
+    },
     "scale": {
       "description": "Scales are functions that transform a domain of data values (numbers, dates, strings, etc) to a range of visual values (pixels, colors, sizes). A scale function takes a single data value as input and returns a visual value. Vega includes different types of scales for quantitative data or ordinal/categorical data.",
-      "type": "object",
-      "additionalProperties": true,
       "oneOf": [
-        { "$ref": "#/definitions/ordinal-scale" },
-        { "$ref": "#/definitions/time-scale" },
-        { "$ref": "#/definitions/quantitative-scale" }
+        {
+          "title": "Ordinal",
+          "$ref": "#/definitions/ordinal-scale"
+        },
+        {
+          "title": "Time",
+          "$ref": "#/definitions/time-scale"
+        },
+        {
+          "title": "Quantitative",
+          "$ref": "#/definitions/quantitative-scale"
+        }
       ]
     },
-    "common-scale": {
+    "ordinal-scale": {
       "type": "object",
+      "additionalProperties": false,
+      "required": [ "type", "name" ],
       "properties": {
+        "type": {
+          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
+          "type": "string",
+          "enum": ["ordinal"]
+        },
+        "name": {
+          "description": "A unique name for the scale.",
+          "type": "string"
+        },
+        "domain": {
+          "description": "The domain of the scale, representing the set of data values. For quantitative data, this can take the form of a two-element array with minimum and maximum values. For ordinal/categorical data, this may be an array of valid input values. The domain may also be specified by a reference to a data source.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "range": {
+          "description": "The range of the scale, representing the set of visual values. For numeric values, the range can take the form of a two-element array with minimum and maximum values. For ordinal or quantized data, the range may by an array of desired output values, which are mapped to elements in the specified domain. See the section on range literals below for more options. For ordinal scales only, the range can be defined using a DataRef: the range values are then drawn dynamically from a backing data set.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "string",
+              "enum": ["width", "height", "shapes", "category10", "category20"]
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "rangeMin": {
+          "description": "Sets the minimum value in the scale range. rangeMin can be used to override, or (with rangeMax) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "rangeMax": {
+          "description": "Sets the maximum value in the scale range. rangeMax can be used to override, or (with rangeMin) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "reverse": {
+          "description": "If true, flips the scale range.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "round": {
+          "description": "If true, rounds numeric output values to integers. This can be helpful for snapping to the pixel grid.",
+          "type": "boolean"
+        },
+        "data": {
+          "description": "The name of the data set containing domain values.",
+          "$ref": "#/definitions/data-name"
+        },
+        "field": {
+          "description": "A reference to the desired data field(s) (e.g., \"data.price\"). An array of fields will include values for all referenced fields. Typically string values are used to indicate the field to lookup. However, one can specify an indirect lookup of the field name using an object parameter of the form {\"group\": \"data.f\"}. In this case, the value of the field data.f is first retrieved from the enclosing group's data, and then used as the field name for the current data set. In other words, you can determine the field name dynamically from your data.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            },
+            {
+              "type": "array"
+            }
+          ]
+        },
+        "points": {
+          "description": "If true, distributes the ordinal values over a quantitative range at uniformly spaced points. The spacing of the points can be adjusted using the padding property. If false, the ordinal scale will construct evenly-spaced bands, rather than points.",
+          "type": "boolean"
+        },
+        "padding": {
+          "description": "Applies spacing among ordinal elements in the scale range. The actual effect depends on how the scale is configured. If the points parameter is true, the padding value is interpreted as a multiple of the spacing between points. A reasonable value is 1.0, such that the first and last point will be offset from the minimum and maximum value by half the distance between points. Otherwise, padding is typically in the range [0, 1] and corresponds to the fraction of space in the range interval to allocate to padding. A value of 0.5 means that the range band width will be equal to the padding width. For more, see the D3 ordinal scale documentation.",
+          "type": "number"
+        },
+        "sort": {
+          "description": "If true, the values in the scale domain will be sorted according to their natural order. The default value is false.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "time-scale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name"],
+      "properties": {
+        "type": {
+          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
+          "type": "string",
+          "enum": ["time", "utc"]
+        },
         "name": {
           "description": "A unique name for the scale.",
           "type": "string"
@@ -589,7 +729,7 @@
         },
         "data": {
           "description": "The name of the data set containing domain values.",
-          "type": "string"
+          "$ref": "#/definitions/data-name"
         },
         "field": {
           "description": "A reference to the desired data field(s) (e.g., \"data.price\"). An array of fields will include values for all referenced fields. Typically string values are used to indicate the field to lookup. However, one can specify an indirect lookup of the field name using an object parameter of the form {\"group\": \"data.f\"}. In this case, the value of the field data.f is first retrieved from the enclosing group's data, and then used as the field name for the current data set. In other words, you can determine the field name dynamically from your data.",
@@ -603,48 +743,6 @@
               "type": "array"
             }
           ]
-        }
-      }
-    },
-    "ordinal-scale": {
-      "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-scale" }
-      ],
-      "properties": {
-        "type": {
-          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
-          "type": "string",
-          "enum": ["ordinal"]
-        },
-        "points": {
-          "description": "If true, distributes the ordinal values over a quantitative range at uniformly spaced points. The spacing of the points can be adjusted using the padding property. If false, the ordinal scale will construct evenly-spaced bands, rather than points.",
-          "type": "boolean"
-        },
-        "padding": {
-          "description": "Applies spacing among ordinal elements in the scale range. The actual effect depends on how the scale is configured. If the points parameter is true, the padding value is interpreted as a multiple of the spacing between points. A reasonable value is 1.0, such that the first and last point will be offset from the minimum and maximum value by half the distance between points. Otherwise, padding is typically in the range [0, 1] and corresponds to the fraction of space in the range interval to allocate to padding. A value of 0.5 means that the range band width will be equal to the padding width. For more, see the D3 ordinal scale documentation.",
-          "type": "number"
-        },
-        "sort": {
-          "description": "If true, the values in the scale domain will be sorted according to their natural order. The default value is false.",
-          "type": "boolean",
-          "default": false
-        }
-      }
-    },
-    "time-scale": {
-      "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-scale" }
-      ],
-      "required": [ "type" ],
-      "properties": {
-        "type": {
-          "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
-          "type": "string",
-          "enum": ["time", "utc"]
         },
         "clamp": {
           "description": "If true, values that exceed the data domain are clamped to either the minimum or maximum range value.",
@@ -659,16 +757,130 @@
     },
     "quantitative-scale": {
       "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-scale" }
-      ],
-      "required": [ "type" ],
+      "additionalProperties": false,
+      "required": ["name"],
       "properties": {
         "type": {
           "description": "The type of scale. If unspecified, the default value is linear. For ordinal scales, the value should be ordinal. For dates and times the value should be time or utc (for UTC time). The supported quantitative scale types are linear, log, pow, sqrt, quantile, quantize, and threshold.",
           "type": "string",
-          "enum": ["linear", "log", "pow", "sqrt", "quantile", "quantize", "threshold"]
+          "enum": ["linear", "log", "pow", "sqrt", "quantile", "quantize", "threshold"],
+          "default": "linear"
+        },
+        "name": {
+          "description": "A unique name for the scale.",
+          "type": "string"
+        },
+        "domain": {
+          "description": "The domain of the scale, representing the set of data values. For quantitative data, this can take the form of a two-element array with minimum and maximum values. For ordinal/categorical data, this may be an array of valid input values. The domain may also be specified by a reference to a data source.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "domainMin": {
+          "description": "For quantitative scales only, sets the minimum value in the scale domain. domainMin can be used to override, or (with domainMax) used in lieu of, the domain property.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            },
+            {
+              "$ref": "#/definitions/signal-ref"
+            }
+          ]
+        },
+        "domainMax": {
+          "description": "For quantitative scales only, sets the maximum value in the scale domain. domainMax can be used to override, or (with domainMin) used in lieu of, the domain property.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            },
+            {
+              "$ref": "#/definitions/signal-ref"
+            }
+          ]
+        },
+        "range": {
+          "description": "The range of the scale, representing the set of visual values. For numeric values, the range can take the form of a two-element array with minimum and maximum values. For ordinal or quantized data, the range may by an array of desired output values, which are mapped to elements in the specified domain. See the section on range literals below for more options. For ordinal scales only, the range can be defined using a DataRef: the range values are then drawn dynamically from a backing data set.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            {
+              "type": "string",
+              "enum": ["width", "height", "shapes", "category10", "category20"]
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "rangeMin": {
+          "description": "Sets the minimum value in the scale range. rangeMin can be used to override, or (with rangeMax) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "rangeMax": {
+          "description": "Sets the maximum value in the scale range. rangeMax can be used to override, or (with rangeMin) used in lieu of, the range property.",
+          "type": "number"
+        },
+        "reverse": {
+          "description": "If true, flips the scale range.",
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/definitions/data-ref"
+            }
+          ]
+        },
+        "round": {
+          "description": "If true, rounds numeric output values to integers. This can be helpful for snapping to the pixel grid.",
+          "type": "boolean"
+        },
+        "data": {
+          "description": "The name of the data set containing domain values.",
+          "$ref": "#/definitions/data-name"
+        },
+        "field": {
+          "description": "A reference to the desired data field(s) (e.g., \"data.price\"). An array of fields will include values for all referenced fields. Typically string values are used to indicate the field to lookup. However, one can specify an indirect lookup of the field name using an object parameter of the form {\"group\": \"data.f\"}. In this case, the value of the field data.f is first retrieved from the enclosing group's data, and then used as the field name for the current data set. In other words, you can determine the field name dynamically from your data.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": { }
+            },
+            {
+              "type": "array"
+            }
+          ]
         },
         "clamp": {
           "description": "If true, values that exceed the data domain are clamped to either the minimum or maximum range value.",
@@ -715,7 +927,7 @@
           "additionalProperties": false,
           "properties": {
             "data": {
-              "type": "string"
+              "$ref": "#/definitions/data-name"
             },
             "mark": {
               "type": "string"
@@ -824,20 +1036,28 @@
         }
       }
     },
-    "common-value-ref": {
+    "number-value-ref": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
+        "value": {
+          "description": "A constant value. If field is specified, this value is ignored.",
+          "type": "number"
+        },
+        "mult": {
+          "description": "A multiplier for the value, equivalent to (mult * value). Multipliers are applied after any scale transformation.",
+          "type": "number"
+        },
+        "offset": {
+          "description": "A simple additive offset to bias the final value, equivalent to (value + offset). Offsets are added after any scale transformation and multipliers.",
+          "type": "number"
+        },
+        "band": {
+          "description": "If true, and scale is specified, uses the range band of the scale as the retrieved value. This option is useful for determining widths with an ordinal scale.",
+          "type": "boolean"
+        },
         "field": {
-          "description": "A field (property) from which to pull a data value. The corresponding data set is determined by the mark's from property. Dot notation (\"data.price\") is used to access nested properties; if a dot character is actually part of the property name, you must escape the dot with a backslash: \"some\\.field\". If the field property is an object, then the field value will be determined indirectly. The object must have a \"group\" property, this references the parent group's data rather than the current marks' data. For example {\"group\": \"data.f\"} will use the value of the data.f field on the group's data as the field name to lookup on the current mark's data.",
-          "oneOf": [
-            {
-              "type": "string"
-            },
-            {
-              "$ref": "#/definitions/field-ref"
-            }
-          ]
+          "$ref": "#/definitions/field-ref"
         },
         "group": {
           "description": "Similar to field, but references a property of the enclosing group's data, not the current mark. If \"width\" or \"height\" are specified, the width or height of the enclosing group mark is returned. Otherwise, the given named property will be retrieved from the the group mark's backing data element. Advanced Use: If both the group and field parameters are specified (or group is set to true), then a double lookup will occur: first the field value will be retrieved, it will then be used as a property name to look up on the data object specified by the group parameter.",
@@ -881,51 +1101,15 @@
           "items": {
             "$ref": "#/definitions/rule"
           }
-        }
-      }
-    },
-    "number-value-ref": {
-      "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-value-ref" }
-      ],
-      "properties": {
-        "value": {
-          "description": "A constant value. If field is specified, this value is ignored.",
-          "oneOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string",
-              "enum": ["auto"]
-            }
-          ]
         },
         "signal": {
           "type": "string"
-        },
-        "mult": {
-          "description": "A multiplier for the value, equivalent to (mult * value). Multipliers are applied after any scale transformation.",
-          "type": "number"
-        },
-        "offset": {
-          "description": "A simple additive offset to bias the final value, equivalent to (value + offset). Offsets are added after any scale transformation and multipliers.",
-          "type": "number"
-        },
-        "band": {
-          "description": "If true, and scale is specified, uses the range band of the scale as the retrieved value. This option is useful for determining widths with an ordinal scale.",
-          "type": "boolean"
         }
       }
     },
     "string-value-ref": {
       "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-value-ref" }
-      ],
+      "additionalProperties": false,
       "properties": {
         "value": {
           "description": "A constant value. If field is specified, this value is ignored.",
@@ -934,19 +1118,104 @@
         "band": {
           "description": "If true, and scale is specified, uses the range band of the scale as the retrieved value. This option is useful for determining widths with an ordinal scale.",
           "type": "boolean"
+        },
+        "field": {
+          "$ref": "#/definitions/field-ref"
+        },
+        "group": {
+          "description": "Similar to field, but references a property of the enclosing group's data, not the current mark. If \"width\" or \"height\" are specified, the width or height of the enclosing group mark is returned. Otherwise, the given named property will be retrieved from the the group mark's backing data element. Advanced Use: If both the group and field parameters are specified (or group is set to true), then a double lookup will occur: first the field value will be retrieved, it will then be used as a property name to look up on the data object specified by the group parameter.",
+          "anyOf": [
+            {
+              "description": "Whether to reference group data",
+              "type": "boolean"
+            },
+            {
+              "description": "Group field reference",
+              "type": "string"
+            }
+          ]
+        },
+        "scale": {
+          "description": "The name of a scale transform to apply. If the input is an object, it indicates a field value from which to dynamically lookup the scale name. For example {\"field\": \"data.s\"} will use the value of data.s on the current mark's data as the scale name, whereas {\"group\": \"data.t\"} will use the value of data.t on the current group's data as the scale name.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/scale-name"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [ "datum" ],
+              "properties": {
+                "datum": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "rule": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        },
+        "signal": {
+          "type": "string"
         }
       }
     },
     "boolean-value-ref": {
       "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-value-ref" }
-      ],
+      "additionalProperties": false,
       "properties": {
         "value": {
           "description": "A constant value. If field is specified, this value is ignored.",
           "type": "boolean"
+        },
+        "field": {
+          "$ref": "#/definitions/field-ref"
+        },
+        "group": {
+          "description": "Similar to field, but references a property of the enclosing group's data, not the current mark. If \"width\" or \"height\" are specified, the width or height of the enclosing group mark is returned. Otherwise, the given named property will be retrieved from the the group mark's backing data element. Advanced Use: If both the group and field parameters are specified (or group is set to true), then a double lookup will occur: first the field value will be retrieved, it will then be used as a property name to look up on the data object specified by the group parameter.",
+          "anyOf": [
+            {
+              "description": "Whether to reference group data",
+              "type": "boolean"
+            },
+            {
+              "description": "Group field reference",
+              "type": "string"
+            }
+          ]
+        },
+        "scale": {
+          "description": "The name of a scale transform to apply. If the input is an object, it indicates a field value from which to dynamically lookup the scale name. For example {\"field\": \"data.s\"} will use the value of data.s on the current mark's data as the scale name, whereas {\"group\": \"data.t\"} will use the value of data.t on the current group's data as the scale name.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/scale-name"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [ "datum" ],
+              "properties": {
+                "datum": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "rule": {
+          "description": "Documentation forthcoming",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        },
+        "signal": {
+          "type": "string"
         }
       }
     },
@@ -963,29 +1232,73 @@
         }
       }
     },
-    "color-value-ref": {
+    "CSS-value-ref": {
+      "description": "A CSS Color String",
+      "$ref": "#/definitions/string-value-ref"
+    },
+    "RGB-value-ref": {
       "type": "object",
-      "additionalProperties": true,
-      "oneOf": [
-        { "$ref": "#/definitions/common-value-ref" }
-      ],
+      "additionalProperties": false,
+      "required": [ "r", "g", "b" ],
       "properties": {
-        "value": {
-          "description": "A constant value. If field is specified, this value is ignored.",
-          "oneOf": [
-            {
-              "title": "CSS",
-              "type": "string"
-            },
-            {
-              "title": "RGB",
-              "type": "object",
-              "additionalProperties": false,
-              "properties": { }
-            }
-          ]
-        }
+        "r": { "$ref": "#/definitions/number-value-ref" },
+        "g": { "$ref": "#/definitions/number-value-ref" },
+        "b": { "$ref": "#/definitions/number-value-ref" }
       }
+    },
+    "HSL-value-ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "h", "s", "l" ],
+      "properties": {
+        "h": { "$ref": "#/definitions/number-value-ref" },
+        "s": { "$ref": "#/definitions/number-value-ref" },
+        "l": { "$ref": "#/definitions/number-value-ref" }
+      }
+    },
+    "LAB-value-ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "l", "a", "b" ],
+      "properties": {
+        "l": { "$ref": "#/definitions/number-value-ref" },
+        "a": { "$ref": "#/definitions/number-value-ref" },
+        "b": { "$ref": "#/definitions/number-value-ref" }
+      }
+    },
+    "HCL-value-ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [ "h", "c", "l" ],
+      "properties": {
+        "h": { "$ref": "#/definitions/number-value-ref" },
+        "c": { "$ref": "#/definitions/number-value-ref" },
+        "l": { "$ref": "#/definitions/number-value-ref" }
+      }
+    },
+    "color-value-ref": {
+      "oneOf": [
+        {
+          "title": "CSS",
+          "$ref": "#/definitions/CSS-value-ref"
+        },
+        {
+          "title": "RGB",
+          "$ref": "#/definitions/RGB-value-ref"
+        },
+        {
+          "title": "HSL",
+          "$ref": "#/definitions/HSL-value-ref"
+        },
+        {
+          "title": "LAB",
+          "$ref": "#/definitions/LAB-value-ref"
+        },
+        {
+          "title": "HCL",
+          "$ref": "#/definitions/HCL-value-ref"
+        }
+      ]
     },
     "mark-prop": {
       "type": "object",
@@ -1064,9 +1377,7 @@
         },
         "shape": {
           "description": "The symbol shape to use. One of circle (default), square, cross, diamond, triangle-up, or triangle-down",
-          "$ref": "#/definitions/string-value-ref",
-          "default": "circle",
-          "default": "circle"
+          "$ref": "#/definitions/string-value-ref"
         },
         "path": {
           "description": "A path definition in the form of an SVG Path string.",
