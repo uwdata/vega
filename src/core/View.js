@@ -15,6 +15,7 @@ var View = function(el, width, height, model) {
   this._model = null;
   this._width = this.__width = width || 500;
   this._height  = this.__height = height || 300;
+  this._bgcolor = null;
   this._autopad = 1;
   this._padding = {top:0, left:0, bottom:0, right:0};
   this._viewport = null;
@@ -142,6 +143,15 @@ prototype.height = function(height) {
   return this;
 };
 
+prototype.background = function(bgcolor) {
+  if (!arguments.length) return this._bgcolor;
+  if (this._bgcolor !== bgcolor) {
+    this._bgcolor = bgcolor;
+    this.initialize();
+  }
+  return this;
+};
+
 prototype.padding = function(pad) {
   if (!arguments.length) return this._padding;
   if (this._padding !== pad) {
@@ -180,10 +190,12 @@ prototype.autopad = function(opt) {
     this._padding = pad;
     this._width = Math.max(0, this.__width - (l+r));
     this._height = Math.max(0, this.__height - (t+b));
-    this._model.width(this._width);
-    this._model.height(this._height);
-    this.initialize();
-    this.update();
+
+    this._model.width(this._width)
+      .height(this._height).reset();
+
+    this.initialize()
+      .update({props:"enter"}).update({props:"update"});
   } else {
     this.padding(pad).update(opt);
   }
@@ -216,7 +228,7 @@ prototype.renderer = function(type) {
 
 prototype.initialize = function(el) {
   var v = this, prevHandler,
-      w = v._width, h = v._height, pad = v._padding;
+      w = v._width, h = v._height, pad = v._padding, bg = v._bgcolor;
 
   if (!arguments.length || el === null) {
     el = this._el ? this._el.parentNode : null;
@@ -241,7 +253,7 @@ prototype.initialize = function(el) {
 
   // renderer
   v._renderer = (v._renderer || new this._io.Renderer())
-    .initialize(el, w, h, pad);
+    .initialize(el, w, h, pad, bg);
   
   // input handler
   prevHandler = v._handler;
@@ -364,6 +376,7 @@ View.factory = function(model) {
       .renderer(opt.renderer || "canvas")
       .width(defs.width)
       .height(defs.height)
+      .background(defs.background)
       .padding(defs.padding);
 
     if(opt.el || (!opt.el && v instanceof HeadlessView)) v.initialize(opt.el);

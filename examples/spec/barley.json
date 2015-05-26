@@ -12,10 +12,10 @@
       "transform": [
         {
           "type": "aggregate",
-          "fields": [{"name": "yield", "ops": ["median"]}],
-          "group_by": ["variety"]
+          "groupby": ["variety"],
+          "summarize": [{"name": "yield", "ops": ["median"]}]
         },
-        {"type": "sort", "by": "-yield_median"}
+        {"type": "sort", "by": "-median_yield"}
       ]
     },
     {
@@ -24,10 +24,10 @@
       "transform": [
         {
           "type": "aggregate",
-          "fields": [{"name": "yield", "ops": ["median"]}],
-          "group_by": ["site"]
+          "groupby": ["site"],
+          "summarize": [{"name": "yield", "ops": ["median"]}]
         },
-        {"type": "sort", "by": "-yield_median"}
+        {"type": "sort", "by": "-median_yield"}
       ]
     }
   ],
@@ -76,7 +76,7 @@
       "type": "group",
       "from": {
         "data": "barley",
-        "transform": [{"type": "facet", "keys": ["site"]}]
+        "transform": [{"type": "facet", "groupby": ["site"]}]
       },
       "scales": [
         {

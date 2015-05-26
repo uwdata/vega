@@ -77,7 +77,10 @@ function instance(scale) {
 function ordinal(scale, rng, group) {
   var def = this._def,
       prev = scale._prev,
-      domain, sort, str, refs, dataDrivenRange = false;
+      dataDrivenRange = false,
+      pad = def.padding || 0,
+      outer = def.outerPadding == null ? pad : def.outerPadding,
+      domain, sort, str, refs;
   
   // range pre-processing for data-driven ranges
   if (dl.isObject(def.range) && !dl.isArray(def.range)) {
@@ -96,15 +99,26 @@ function ordinal(scale, rng, group) {
   // range
   if (dl.equal(prev.range, rng)) return;
 
+  // width-defined range
+  if (def.bandWidth) {
+    var bw = def.bandWidth,
+        len = domain.length,
+        start = rng[0] || 0,
+        space = def.points ? (pad*bw) : (pad*bw*(len-1) + 2*outer);
+    rng = [start, start + (bw * len + space)];
+  }
+
   str = typeof rng[0] === 'string';
   if (str || rng.length > 2 || rng.length===1 || dataDrivenRange) {
     scale.range(rng); // color or shape values
+  } else if (def.points && (def.round || def.round == null)) {
+    scale.rangeRoundPoints(rng, pad);
   } else if (def.points) {
-    scale.rangePoints(rng, def.padding||0);
-  } else if (def.round || def.round===undefined) {
-    scale.rangeRoundBands(rng, def.padding||0);
+    scale.rangePoints(rng, pad);
+  } else if (def.round || def.round == null) {
+    scale.rangeRoundBands(rng, pad, outer);
   } else {
-    scale.rangeBands(rng, def.padding||0);
+    scale.rangeBands(rng, pad, outer);
   }
 
   prev.range = rng;
@@ -150,80 +164,141 @@ function quantitative(scale, rng, group) {
   }
 }
 
+function isUniques(scale) { 
+  return scale.type === C.ORDINAL || scale.type === C.QUANTILE; 
+}
+
+function getRefs(def) { 
+  return def.fields || dl.array(def);
+}
+
+function getFields(ref, group) {
+  return dl.array(ref.field).map(function(f) {
+    if (f.parent) return dl.accessor(f.parent)(group.datum)
+    return f; // String or {"signal"}
+  });
+}
+
+// Scale datarefs can be computed over multiple schema types. 
+// This function determines the type of aggregator created, and
+// what data is sent to it: values, tuples, or multi-tuples that must
+// be standardized into a consistent schema. 
+function aggrType(def, scale) {
+  var refs = getRefs(def);
+
+  // If we're operating over only a single domain, send full tuples
+  // through for efficiency (fewer accessor creations/calls)
+  if(refs.length == 1 && dl.array(refs[0].field).length == 1) {
+    return Aggregate.TYPES.TUPLE;
+  }
+
+  // With quantitative scales, we only care about min/max.
+  if(!isUniques(scale)) return Aggregate.TYPES.VALUE;
+
+  // If we don't sort, then we can send values directly to aggrs as well
+  if(!def.sort) return Aggregate.TYPES.VALUE;
+
+  return Aggregate.TYPES.MULTI;
+}
+
+function getCache(which, def, scale, group) {
+  var refs = getRefs(def),
+      atype = aggrType(def, scale),
+      uniques = isUniques(scale),
+      sort = def.sort,
+      ck = "_"+which,
+      fields = getFields(refs[0], group),
+      i, rlen, j, flen, ref, field;
+
+  if(scale[ck]) return scale[ck];
+
+  var cache = scale[ck] = new Aggregate(this._graph).type(atype),
+      groupby, summarize;
+
+  if(uniques) {
+    if(atype === Aggregate.TYPES.VALUE) {
+      groupby = [{ name: C.GROUPBY, get: dl.identity }];
+      summarize = {"*": C.COUNT};
+    } else if(atype === Aggregate.TYPES.TUPLE) {
+      groupby = [{ name: C.GROUPBY, get: dl.$(fields[0]) }];
+      summarize = sort ? [{
+        name: C.VALUE,
+        get:  dl.$(ref.sort || sort.field),
+        ops: [sort.stat]
+      }] : {"*": C.COUNT};
+    } else {  // atype === Aggregate.TYPES.MULTI
+      groupby   = C.GROUPBY;
+      summarize = [{ name: C.VALUE, ops: [sort.stat] }]; 
+    }
+  } else {
+    groupby = [];
+    summarize = [{
+      name: C.VALUE,
+      get: (atype == Aggregate.TYPES.TUPLE) ? dl.$(fields[0]) : dl.identity,
+      ops: [C.MIN, C.MAX],
+      as:  [C.MIN, C.MAX]
+    }];
+  }
+
+  cache.groupby.set(cache, groupby)
+    .summarize.set(cache, summarize);
+
+  return cache;
+}
+
 function dataRef(which, def, scale, group) {
   if (def == null) { return []; }
   if (dl.isArray(def)) return def.map(signal.bind(this));
 
   var self = this, graph = this._graph,
-      refs = def.fields || dl.array(def),
-      uniques = scale.type === C.ORDINAL || scale.type === C.QUANTILE,
-      ck = "_"+which,
-      cache = scale[ck],
-      cacheField = {ops: []},  // the field and measures in the aggregator
-      sort = def.sort,
-      i, rlen, j, flen, r, fields, from, data, keys;
-
-  if (!cache) {
-    cache = scale[ck] = new Aggregate(graph);
-    cacheField.ops = [];
-    cache.singleton(true);
-    if (uniques && sort) cacheField.ops.push(sort.stat);
-  }
+      refs = getRefs(def),
+      atype = aggrType(def, scale),
+      cache = getCache.apply(this, arguments),
+      sort  = def.sort,
+      uniques = isUniques(scale),
+      i, rlen, j, flen, ref, fields, field;
 
   for(i=0, rlen=refs.length; i<rlen; ++i) {
-    r = refs[i];
-    from = r.data || "vg_"+group.datum._id;
+    ref = refs[i];
+    from = ref.data || "vg_"+group.datum._id;
     data = graph.data(from)
       .revises(true)
       .last();
 
     if (data.stamp <= this._stamp) continue;
 
-    fields = dl.array(r.field).map(function(f) {
-      if (f.parent) return dl.accessor(f.parent)(group.datum)
-      return f; // String or {"signal"}
-    });
+    fields = getFields(ref, group);
+    for(j=0, flen=fields.length; j<flen; ++j) {
+      field = fields[j];
 
-    if (uniques) {
-      cacheField.name = sort ? sort.field : "_id";
-      cache.fields.set(cache, [cacheField]);
-      for (j=0, flen=fields.length; j<flen; ++j) {
-        cache.group_by.set(cache, fields[j])
-          .evaluate(data);
-      }
-    } else {
-      for (j=0, flen=fields.length; j<flen; ++j) {
-        cacheField.name = fields[j];
-        cacheField.ops  = [C.MIN, C.MAX];
-        cache.fields.set(cache, [cacheField]) // Treat as flat datasource
-          .evaluate(data);
-      }
+      if(atype === Aggregate.TYPES.VALUE) {
+        cache.accessors(null, field);
+      } else if(atype === Aggregate.TYPES.MULTI) {
+        cache.accessors(field, ref.sort || sort.field);
+      } // Else (Tuple-case) is handled by the aggregator accessors by default
+
+      cache.evaluate(data);
     }
 
     this.dependency(C.DATA, from);
     cache.dependency(C.SIGNALS).forEach(function(s) { self.dependency(C.SIGNALS, s) });
   }
 
-  data = cache.data();
+  data = cache.aggr().result();
   if (uniques) {
-    keys = dl.keys(data)
-      .filter(function(k) { return data[k] != null; });
-
     if (sort) {
       sort = sort.order.signal ? graph.signalRef(sort.order.signal) : sort.order;
-      sort = (sort == C.DESC ? "-" : "+") + "tpl." + cacheField.name;
+      sort = (sort == C.DESC ? "-" : "+") + C.VALUE;
       sort = dl.comparator(sort);
-      keys = keys.map(function(k) { return { key: k, tpl: data[k].tpl }})
-        .sort(sort)
-        .map(function(k) { return k.key; });
+      data = data.sort(sort);
     // } else {  // "First seen" order
     //   sort = dl.comparator("tpl._id");
     }
 
-    return keys;
+    return data.map(function(d) { return d[C.GROUPBY]; });
   } else {
-    data = data[""]; // Unpack flat aggregation
-    return (data === null) ? [] : [data[C.SINGLETON].min, data[C.SINGLETON].max];
+    data = data[0];
+    return !dl.isValid(data) ? [] : [data[C.MIN], data[C.MAX]];
   }
 }
 
@@ -288,7 +363,7 @@ function range(group) {
         return rng;
       }
     } else if (dl.isArray(def.range)) {
-      rng = def.range.map(signal.bind(this));
+      rng = dl.duplicate(def.range).map(signal.bind(this));
     } else if (dl.isObject(def.range)) {
       return null; // early exit
     } else {

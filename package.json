@@ -2,17 +2,21 @@
   "name": "vega",
   "version": "2.0.0",
   "dependencies": {
-    "datalib": "^1.0.11",
-    "canvas": "^1.2.1",
-    "d3": "3.4.x",
+    "datalib": "1.1.x",
+    "d3": "^3.5.5",
+    "d3-geo-projection": "^0.2.13",
     "topojson": "^1.6.18",
     "yargs": "^3.2.1"
+  },
+  "optionalDependencies": {
+    "canvas": "~1.1.6"
   },
   "devDependencies": {
     "browserify": "^9.0.8",
     "browserify-shim": "^3.8.5",
     "chai": "^1.10.0",
     "chromedriver": "^2.14.1",
+    "exorcist": "^0.4.0",
     "gulp": "^3.8.11",
     "gulp-rename": "^1.2.2",
     "gulp-sourcemaps": "^1.5.1",
@@ -26,6 +30,7 @@
     "summary": "^0.3.2",
     "vinyl-buffer": "^1.0.0",
     "vinyl-source-stream": "^1.1.0",
+    "vinyl-transform": "^1.0.0",
     "watchify": "^3.1.0",
     "webdriverio": "^2.4.5",
     "xmldom": "^0.1.19",
@@ -34,6 +39,15 @@
   },
   "scripts": {
     "test": "gulp test"
+  },
+  "browser": {
+    "buffer": false,
+    "canvas": false,
+    "fs": false,
+    "http": false,
+    "request": false,
+    "sync-request": false,
+    "url": false
   },
   "browserify": {
     "transform": [

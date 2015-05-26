@@ -5,13 +5,12 @@
   "signals": [
     {
       "name": "xPos",
-      "init": 265,
       "streams": [{"type": "mousemove", "expr": "p.x", "scale": {"name": "x", "invert": true}}]
     },
     {
       "name": "indexDate",
-      "init": 1104566400000,
-      "streams": [{"type": "xPos", "expr": "datetime(xPos)"}]
+      "init": {"expr": "datetime('Jan 1 2005')"},
+      "streams": [{"type": "xPos", "expr": "max(xPos, datetime('Jan 1 2000'))"}]
     }
   ],
 
@@ -77,7 +76,7 @@
       "type": "group",
       "from": {
         "data": "indexified_stocks",
-        "transform": [{"type": "facet", "keys": ["symbol"]}]
+        "transform": [{"type": "facet", "groupby": ["symbol"]}]
       },
       "marks": [
         {
