@@ -12120,7 +12120,7 @@ proto.evaluate = function(input) {
       hasLegends = this._mark.marktype == C.GROUP 
         && dl.array(this._mark.def.legends).length > 0;
 
-  if(input.add.length || input.rem.length) {
+  if(input.add.length || input.rem.length || !input.mod.length) {
     bounds.mark(this._mark, null, !hasLegends);
   } else {
     input.mod.forEach(function(item) {
