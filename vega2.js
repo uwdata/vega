@@ -12116,18 +12116,21 @@ var proto = (Bounder.prototype = new Node());
 
 proto.evaluate = function(input) {
   debug(input, ["bounds", this._mark.marktype]);
-  var i, ilen, j, jlen, group, legend,
-      items = this._mark.items,
-      hasLegends = this._mark.marktype == C.GROUP 
-        && dl.array(this._mark.def.legends).length > 0;
 
-  if(input.add.length || input.rem.length || !items.length) {
-    bounds.mark(this._mark, null, !hasLegends);
+  var type  = this._mark.marktype,
+      group = type === C.GROUP,
+      items = this._mark.items,
+      hasLegends = dl.array(this._mark.def.legends).length > 0,
+      i, ilen, j, jlen, group, legend;
+
+  if(input.add.length || input.rem.length || !items.length || 
+      type === C.AREA || type === C.LINE) {
+    bounds.mark(this._mark, null, group && !hasLegends);
   } else {
     input.mod.forEach(function(item) { bounds.item(item); });
   }
 
-  if(hasLegends) {
+  if(group && hasLegends) {
     for(i=0, ilen=items.length; i<ilen; ++i) {
       group = items[i];
       group._legendPositions = null;
@@ -16686,6 +16689,8 @@ module.exports = {
   SIGNALS: "signals",
 
   GROUP: "group",
+  AREA:  "area",
+  LINE:  "line",
 
   ENTER: "enter",
   UPDATE: "update",
