@@ -28,7 +28,7 @@ function compile(model, mark, spec) {
       code += "\n  " + ref.code
     } else {
       ref = valueRef(name, ref);
-      code += "dirty = this.tpl.set(o, "+dl.str(name)+", "+ref.val+");";
+      code += "dirty = this.tpl.set(o, "+dl.str(name)+", "+ref.val+") || dirty;" ;
     }
 
     vars[name] = true;
@@ -42,22 +42,22 @@ function compile(model, mark, spec) {
     if (vars.x) {
       code += "\n  if (o.x > o.x2) { "
             + "var t = o.x;"
-            + "dirty = this.tpl.set(o, 'x', o.x2);"
-            + "dirty = this.tpl.set(o, 'x2', t); "
+            + "dirty = this.tpl.set(o, 'x', o.x2) || dirty;" 
+            + "dirty = this.tpl.set(o, 'x2', t) || dirty;"
             + "};";
-      code += "\n  dirty = this.tpl.set(o, 'width', (o.x2 - o.x));";
+      code += "\n  dirty = this.tpl.set(o, 'width', (o.x2 - o.x)) || dirty;" ;
     } else if (vars.width) {
-      code += "\n  dirty = this.tpl.set(o, 'x', (o.x2 - o.width));";
+      code += "\n  dirty = this.tpl.set(o, 'x', (o.x2 - o.width)) || dirty;" ;
     } else {
-      code += "\n  dirty = this.tpl.set(o, 'x', o.x2);"
+      code += "\n  dirty = this.tpl.set(o, 'x', o.x2) || dirty;" 
     }
   }
 
   if (vars.xc) {
     if (vars.width) {
-      code += "\n  dirty = this.tpl.set(o, 'x', (o.xc - o.width/2));";
+      code += "\n  dirty = this.tpl.set(o, 'x', (o.xc - o.width/2)) || dirty;" ;
     } else {
-      code += "\n  dirty = this.tpl.set(o, 'x', o.xc);";
+      code += "\n  dirty = this.tpl.set(o, 'x', o.xc) || dirty;" ;
     }
   }
 
@@ -65,22 +65,22 @@ function compile(model, mark, spec) {
     if (vars.y) {
       code += "\n  if (o.y > o.y2) { "
             + "var t = o.y;"
-            + "dirty = this.tpl.set(o, 'y', o.y2);"
-            + "dirty = this.tpl.set(o, 'y2', t);"
+            + "dirty = this.tpl.set(o, 'y', o.y2) || dirty;" 
+            + "dirty = this.tpl.set(o, 'y2', t) || dirty;" 
             + "};";
-      code += "\n  dirty = this.tpl.set(o, 'height', (o.y2 - o.y));";
+      code += "\n  dirty = this.tpl.set(o, 'height', (o.y2 - o.y)) || dirty;" ;
     } else if (vars.height) {
-      code += "\n  dirty = this.tpl.set(o, 'y', (o.y2 - o.height));";
+      code += "\n  dirty = this.tpl.set(o, 'y', (o.y2 - o.height)) || dirty;" ;
     } else {
-      code += "\n  dirty = this.tpl.set(o, 'y', o.y2);"
+      code += "\n  dirty = this.tpl.set(o, 'y', o.y2) || dirty;" 
     }
   }
 
   if (vars.yc) {
     if (vars.height) {
-      code += "\n  dirty = this.tpl.set(o, 'y', (o.yc - o.height/2));";
+      code += "\n  dirty = this.tpl.set(o, 'y', (o.yc - o.height/2)) || dirty;" ;
     } else {
-      code += "\n  dirty = this.tpl.set(o, 'y', o.yc);";
+      code += "\n  dirty = this.tpl.set(o, 'y', o.yc) || dirty;" ;
     }
   }
   
