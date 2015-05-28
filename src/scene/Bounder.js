@@ -18,7 +18,13 @@ proto.evaluate = function(input) {
       hasLegends = this._mark.marktype == C.GROUP 
         && dl.array(this._mark.def.legends).length > 0;
 
-  bounds.mark(this._mark, null, !hasLegends);
+  if(input.add.length || input.rem.length) {
+    bounds.mark(this._mark, null, !hasLegends);
+  } else {
+    input.mod.forEach(function(item) {
+      bounds.item(item);
+    });
+  }
 
   if(hasLegends) {
     for(i=0, ilen=this._mark.items.length; i<ilen; ++i) {

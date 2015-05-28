@@ -3615,8 +3615,9 @@ function build() {
 
   v._renderNode.evaluate = function(input) {
     debug(input, ["rendering"]);
+    var s = v._model.scene(),
+        ds, d;
 
-    var s = v._model.scene();
     if(input.trans) {
       input.trans.start(function(items) { v._renderer.render(s, items); });
     } else {
@@ -3624,7 +3625,6 @@ function build() {
     }
 
     // For all updated datasources, finalize their changesets.
-    var d, ds;
     for(d in input.data) {
       ds = v._model.data(d);
       if(!ds.revises()) continue;
@@ -12120,7 +12120,13 @@ proto.evaluate = function(input) {
       hasLegends = this._mark.marktype == C.GROUP 
         && dl.array(this._mark.def.legends).length > 0;
 
-  bounds.mark(this._mark, null, !hasLegends);
+  if(input.add.length || input.rem.length) {
+    bounds.mark(this._mark, null, !hasLegends);
+  } else {
+    input.mod.forEach(function(item) {
+      bounds.item(item);
+    });
+  }
 
   if(hasLegends) {
     for(i=0, ilen=this._mark.items.length; i<ilen; ++i) {
@@ -12303,7 +12309,7 @@ proto.sibling = function(name) {
 proto.evaluate = function(input) {
   debug(input, ["building", this._from, this._def.type]);
 
-  var output, fullUpdate, fcs, data;
+  var output, fullUpdate, fcs, data, dirty;
 
   if(this._ds) {
     output = changeset.create(input);
@@ -12333,7 +12339,15 @@ proto.evaluate = function(input) {
   }
 
   output = this._graph.evaluate(output, this._encoder);
-  return this._isSuper ? this._graph.evaluate(output, this._bounder) : output;
+
+  // Supernodes calculate bounds too, but only on items marked dirty.
+  if(this._isSuper) {
+    dirty = tuple.idMap(output.dirty);
+    output.mod = output.mod.filter(function(x) { return dirty[x._id] === 1 });
+    output = this._graph.evaluate(output, this._bounder);
+  }
+
+  return output;
 };
 
 function newItem() {
