@@ -3620,7 +3620,7 @@ function build() {
     if(input.trans) {
       input.trans.start(function(items) { v._renderer.render(s, items); });
     } else {
-      v._renderer.render(s);
+      v._renderer.render(s, input.dirty.length && input.dirty);
     }
 
     // For all updated datasources, finalize their changesets.
@@ -4404,6 +4404,7 @@ function copy(a, b) {
   b.sort  = a ? a.sort  : null;
   b.facet = a ? a.facet : null;
   b.trans = a ? a.trans : null;
+  b.dirty = a ? a.dirty : [];
   b.request = a ? a.request : null;
   REEVAL.forEach(function(d) { b[d] = a ? a[d] : {}; });
 }
@@ -4435,9 +4436,10 @@ function derive(datum, prev) {
 // WARNING: operators should only call this once per timestamp!
 function set(t, k, v) {
   var prev = t[k];
-  if(prev === v) return;
+  if(prev === v) return false;
   set_prev(t, k);
   t[k] = v;
+  return true;
 }
 
 function set_prev(t, k) {
@@ -8733,7 +8735,8 @@ function compile(model, mark, spec) {
         reflow:  false
       };
       
-  code += "var o = trans ? {} : item;\n"
+  code += "var o = trans ? {} : item,\n" +
+          "    dirty = false;";
   
   for (i=0, len=names.length; i<len; ++i) {
     ref = spec[name = names[i]];
@@ -8743,7 +8746,7 @@ function compile(model, mark, spec) {
       code += "\n  " + ref.code
     } else {
       ref = valueRef(name, ref);
-      code += "this.tpl.set(o, "+dl.str(name)+", "+ref.val+");";
+      code += "dirty = this.tpl.set(o, "+dl.str(name)+", "+ref.val+");";
     }
 
     vars[name] = true;
@@ -8757,22 +8760,22 @@ function compile(model, mark, spec) {
     if (vars.x) {
       code += "\n  if (o.x > o.x2) { "
             + "var t = o.x;"
-            + "this.tpl.set(o, 'x', o.x2);"
-            + "this.tpl.set(o, 'x2', t); "
+            + "dirty = this.tpl.set(o, 'x', o.x2);"
+            + "dirty = this.tpl.set(o, 'x2', t); "
             + "};";
-      code += "\n  this.tpl.set(o, 'width', (o.x2 - o.x));";
+      code += "\n  dirty = this.tpl.set(o, 'width', (o.x2 - o.x));";
     } else if (vars.width) {
-      code += "\n  this.tpl.set(o, 'x', (o.x2 - o.width));";
+      code += "\n  dirty = this.tpl.set(o, 'x', (o.x2 - o.width));";
     } else {
-      code += "\n  this.tpl.set(o, 'x', o.x2);"
+      code += "\n  dirty = this.tpl.set(o, 'x', o.x2);"
     }
   }
 
   if (vars.xc) {
     if (vars.width) {
-      code += "\n  this.tpl.set(o, 'x', (o.xc - o.width/2));";
+      code += "\n  dirty = this.tpl.set(o, 'x', (o.xc - o.width/2));";
     } else {
-      code += "\n  this.tpl.set(o, 'x', o.xc);";
+      code += "\n  dirty = this.tpl.set(o, 'x', o.xc);";
     }
   }
 
@@ -8780,27 +8783,28 @@ function compile(model, mark, spec) {
     if (vars.y) {
       code += "\n  if (o.y > o.y2) { "
             + "var t = o.y;"
-            + "this.tpl.set(o, 'y', o.y2);"
-            + "this.tpl.set(o, 'y2', t);"
+            + "dirty = this.tpl.set(o, 'y', o.y2);"
+            + "dirty = this.tpl.set(o, 'y2', t);"
             + "};";
-      code += "\n  this.tpl.set(o, 'height', (o.y2 - o.y));";
+      code += "\n  dirty = this.tpl.set(o, 'height', (o.y2 - o.y));";
     } else if (vars.height) {
-      code += "\n  this.tpl.set(o, 'y', (o.y2 - o.height));";
+      code += "\n  dirty = this.tpl.set(o, 'y', (o.y2 - o.height));";
     } else {
-      code += "\n  this.tpl.set(o, 'y', o.y2);"
+      code += "\n  dirty = this.tpl.set(o, 'y', o.y2);"
     }
   }
 
   if (vars.yc) {
     if (vars.height) {
-      code += "\n  this.tpl.set(o, 'y', (o.yc - o.height/2));";
+      code += "\n  dirty = this.tpl.set(o, 'y', (o.yc - o.height/2));";
     } else {
-      code += "\n  this.tpl.set(o, 'y', o.yc);";
+      code += "\n  dirty = this.tpl.set(o, 'y', o.yc);";
     }
   }
   
   if (hasPath(mark, vars)) code += "\n  item.touch();";
   code += "\n  if (trans) trans.interpolate(item, o);";
+  code += "\n  return dirty;";
 
   try {
     var encoder = Function("item", "group", "trans", "db", 
@@ -8857,11 +8861,11 @@ function rule(model, name, rules) {
       db.push.apply(db, pred.data);
       inputs.push(args+" = {"+input.join(', ')+"}");
       code += "if("+p+".call("+p+","+args+", db, signals, predicates)) {\n" +
-        "    this.tpl.set(o, "+dl.str(name)+", "+ref.val+");\n";
+        "    dirty = this.tpl.set(o, "+dl.str(name)+", "+ref.val+");\n";
       code += rules[i+1] ? "  } else " : "  }";
     } else {
       code += "{\n" + 
-        "    this.tpl.set(o, "+dl.str(name)+", "+ref.val+");\n"+
+        "    dirty = this.tpl.set(o, "+dl.str(name)+", "+ref.val+");\n"+
         "  }";
     }
   });
@@ -12444,6 +12448,7 @@ proto.evaluate = function(input) {
       enter  = props.enter,
       update = props.update,
       exit   = props.exit,
+      dirty  = input.dirty,
       preds  = this._graph.predicates(),
       sg = graph.signalValues(),  // For expediency, get all signal values
       db = graph.dataValues(), 
@@ -12454,7 +12459,7 @@ proto.evaluate = function(input) {
     if(prop = props[req]) {
       for(i=0, len=input.mod.length; i<len; ++i) {
         item = input.mod[i];
-        encode.call(this, prop, item, input.trans, db, sg, preds);
+        encode.call(this, prop, item, input.trans, db, sg, preds, dirty);
       }
     }
 
@@ -12464,32 +12469,34 @@ proto.evaluate = function(input) {
   // Items marked for removal are at the head of items. Process them first.
   for(i=0, len=input.rem.length; i<len; ++i) {
     item = input.rem[i];
-    if(update) encode.call(this, update, item, input.trans, db, sg, preds);
-    if(exit)   encode.call(this, exit,   item, input.trans, db, sg, preds); 
+    if(update) encode.call(this, update, item, input.trans, db, sg, preds, dirty);
+    if(exit)   encode.call(this, exit,   item, input.trans, db, sg, preds, dirty); 
     if(input.trans && !exit) input.trans.interpolate(item, EMPTY);
     else if(!input.trans) item.remove();
   }
 
   for(i=0, len=input.add.length; i<len; ++i) {
     item = input.add[i];
-    if(enter)  encode.call(this, enter,  item, input.trans, db, sg, preds);
-    if(update) encode.call(this, update, item, input.trans, db, sg, preds);
+    if(enter)  encode.call(this, enter,  item, input.trans, db, sg, preds, dirty);
+    if(update) encode.call(this, update, item, input.trans, db, sg, preds, dirty);
     item.status = C.UPDATE;
   }
 
   if(update) {
     for(i=0, len=input.mod.length; i<len; ++i) {
       item = input.mod[i];
-      encode.call(this, update, item, input.trans, db, sg, preds);
+      encode.call(this, update, item, input.trans, db, sg, preds, dirty);
     }
   }
 
   return input;
 };
 
-function encode(prop, item, trans, db, sg, preds) {
-  var enc = prop.encode;
-  enc.call(enc, item, item.mark.group||item, trans, db, sg, preds);
+function encode(prop, item, trans, db, sg, preds, dirty) {
+  var enc = prop.encode,
+      isDirty = enc.call(enc, item, item.mark.group||item, trans, db, sg, preds);
+
+  if (isDirty) dirty.push(item);
 }
 
 // If a specified property set called, or update property set 
@@ -13232,7 +13239,7 @@ var skip = {
   "url":  1
 };
 
-prototype.interpolate = function(item, values, stamp) {
+prototype.interpolate = function(item, values) {
   var key, curr, next, interp, list = null;
 
   for (key in values) {
