@@ -12116,21 +12116,20 @@ var proto = (Bounder.prototype = new Node());
 
 proto.evaluate = function(input) {
   debug(input, ["bounds", this._mark.marktype]);
-  var i, ilen, j, jlen, group, legend;
+  var i, ilen, j, jlen, group, legend,
+      items = this._mark.items,
       hasLegends = this._mark.marktype == C.GROUP 
         && dl.array(this._mark.def.legends).length > 0;
 
-  if(input.add.length || input.rem.length || !input.mod.length) {
+  if(input.add.length || input.rem.length || !items.length) {
     bounds.mark(this._mark, null, !hasLegends);
   } else {
-    input.mod.forEach(function(item) {
-      bounds.item(item);
-    });
+    input.mod.forEach(function(item) { bounds.item(item); });
   }
 
   if(hasLegends) {
-    for(i=0, ilen=this._mark.items.length; i<ilen; ++i) {
-      group = this._mark.items[i];
+    for(i=0, ilen=items.length; i<ilen; ++i) {
+      group = items[i];
       group._legendPositions = null;
       for(j=0, jlen=group.legendItems.length; j<jlen; ++j) {
         legend = group.legendItems[j];
@@ -12309,7 +12308,7 @@ proto.sibling = function(name) {
 proto.evaluate = function(input) {
   debug(input, ["building", this._from, this._def.type]);
 
-  var output, fullUpdate, fcs, data, dirty;
+  var output, fullUpdate, fcs, data;
 
   if(this._ds) {
     output = changeset.create(input);
@@ -12342,8 +12341,7 @@ proto.evaluate = function(input) {
 
   // Supernodes calculate bounds too, but only on items marked dirty.
   if(this._isSuper) {
-    dirty = tuple.idMap(output.dirty);
-    output.mod = output.mod.filter(function(x) { return dirty[x._id] === 1 });
+    output.mod = output.mod.filter(function(x) { return !!x._dirty });
     output = this._graph.evaluate(output, this._bounder);
   }
 
@@ -12527,7 +12525,7 @@ function encode(prop, item, trans, db, sg, preds, dirty) {
   var enc = prop.encode,
       isDirty = enc.call(enc, item, item.mark.group||item, trans, db, sg, preds);
 
-  if (isDirty) dirty.push(item);
+  if (isDirty) dirty.push((item._dirty = isDirty, item));
 }
 
 // If a specified property set called, or update property set 
