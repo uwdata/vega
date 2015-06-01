@@ -84,3 +84,22 @@ body {
 #vis div {
   border: 1px dashed #ccc;
 }
+
+/************************************************/
+/************* Added for Scenegraph *************/
+/************************************************/
+#scenegraph {
+  -webkit-user-select: none; /* Chrome/Safari */        
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+ */
+  user-select: none;
+}
+
+.text {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}

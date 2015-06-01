@@ -62,8 +62,16 @@ ved.parse = function() {
       renderer: ved.renderType
     });
     (ved.view = view).update();
+    ved.root = view.model().scene();
+    ved.root.update = tryThis;
+    ved.drawScenegraph();
   });
 };
+
+ved.drawScenegraph = function() {
+  d3.select("#scenegraph").selectAll("*").remove();
+  extractScenegraph(ved.root);
+}
 
 ved.resize = function(event) {
   var h = window.innerHeight - 30;

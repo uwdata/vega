@@ -10,6 +10,7 @@
     <script src="../lib/d3.layout.cloud.js"></script>
     <script src="../../vega2.js"></script>
     <script src="specs.js"></script>
+    <script src="../../scenegraph/scenegraph.js"></script>
     <script src="editor.js"></script>
   </head>
   <body>    
@@ -35,6 +36,11 @@
           <div class="mod_title">Visualization</div>
         </div>
         <div id="vis"></div>
+        <div class="mod_header">
+          <div class="mod_title" style="display:inline">Scenegraph</div>
+          <input id="btn_scene_show" style="display:inline" type="button" value="Show All" onclick="toggle()"></input>
+        </div>
+        <div id="scenegraph"></div>
       </div>
       <br clear="all"/>
     </div>
