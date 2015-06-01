@@ -42,13 +42,53 @@
 
 var flatData, data, i, duration, root, tree, svg, diagonal;
 var init = false;
-var AUTO_COLLAPSE_THREASHOLD = 7;
 
-//TODO: rename...
-function tryThis() {
+/*************************************************************/
+/************************* Constants *************************/
+/*************************************************************/
+var AUTO_COLLAPSE_THREASHOLD = 7;
+var DELAY = 2000;
+
+/*************************************************************/
+/**************** End-User Scenegraph Update *****************/
+/*************************************************************/
+
+// TODO: The scenegraph is still updated when the user has
+//       NOT done an interaction (i.e. if the user just moves
+//       the mouse around the brush example without brushing).
+//       This functionality will cause the scenegraph to
+//       remove potentially interesting information (i.e. to
+//       update the scenegraph more than we want it to). For
+//       example, if the user completes an interaction, then
+//       waits for the scenegraph to update, and then goes to
+//       interact with the scenegraph, it will then update
+//       again to remove the interesting highlighting.
+
+// BASED ON: https://remysharp.com/2010/07/21/throttling-function-calls
+// Reset delay each time debounce is called to prevent update.
+var timer = null;
+function debounce(fn, root, delay) {
+  return function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { fn(root); }, delay);
+  };
+} // end debounce
+
+// Remove the old scenegraph and create a new one.
+function fullfillUpdate(root) {
   d3.select("#scenegraph").selectAll("*").remove();
-  extractScenegraph(this);
-}
+  extractScenegraph(root);
+} // end fullfillUpdate
+
+// Wait until DELAY has passed without end-user interaction 
+// before updating the scenegraph.
+function updateScenegraph() {
+  debounce(fullfillUpdate, this, DELAY)();
+} // end updateScenegraph
+
+/*************************************************************/
+/******************** Extract Scenegraph *********************/
+/*************************************************************/
 
 function getID(group) {
   var id = group.marktype + ".";
@@ -60,7 +100,7 @@ function getID(group) {
 
 /*
  * There are two types of nodes in the scenegraph, Group marks and Items.
- * GROUP: <name>, <type>, <parent>
+ * GROUP: <name>, <parent>, <type>
  * ITEM:  <name>, <parent>, <data> 
  */
 function extractScenegraph(node) {
@@ -130,10 +170,13 @@ function extractScenegraph(node) {
   drawGraph(nodes);
 } // end extractScenegraph
 
-//
-// Based on:  http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
-//            http://bl.ocks.org/mbostock/4339083
-// 
+
+/*************************************************************/
+/********************** Draw Scenegraph **********************/
+/*************************************************************/
+
+// BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
+//           http://bl.ocks.org/mbostock/4339083
 function drawGraph(nodes) {
 
   flatData = nodes.slice(0);
@@ -210,7 +253,7 @@ function collapse(d) {
 } // end collapse
 
 function expand(d) {
-  if (d._children) {
+  if(d._children) {
     d.children = d._children;
     d.children.forEach(expand);
     d._children = null;

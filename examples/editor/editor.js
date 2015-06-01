@@ -63,7 +63,7 @@ ved.parse = function() {
     });
     (ved.view = view).update();
     ved.root = view.model().scene();
-    ved.root.update = tryThis;
+    ved.root.updateScenegraph = updateScenegraph;
     ved.drawScenegraph();
   });
 };

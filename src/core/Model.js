@@ -70,6 +70,9 @@ proto.predicate = function(name, predicate) {
 proto.predicates = function() { return this._predicates; };
 
 proto.scene = function(renderer) {
+  // Some form of user interaction has occured, so update scenegraph.
+  if(this._scene && this._scene.updateScenegraph) this._scene.updateScenegraph();
+
   if(!arguments.length) return this._scene;
   if(this._builder) this.node().removeListener(this._builder.disconnect());
   this._builder = new GroupBuilder(this, this._defs.marks, this._scene={});
