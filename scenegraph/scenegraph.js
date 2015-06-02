@@ -36,7 +36,6 @@
  *        showing and hiding all nodes).
  *    2. Figure out some of the logic about how to connect scenegraph
  *       elements to the specification.
- *    3. Figure out how to set up the repository to store this work.
  *
  */
 
@@ -47,7 +46,7 @@ var init = false;
 /************************* Constants *************************/
 /*************************************************************/
 var AUTO_COLLAPSE_THREASHOLD = 7;
-var DELAY = 2000;
+var DELAY = 500;
 
 /*************************************************************/
 /**************** End-User Scenegraph Update *****************/
@@ -67,18 +66,18 @@ var DELAY = 2000;
 // BASED ON: https://remysharp.com/2010/07/21/throttling-function-calls
 // Reset delay each time debounce is called to prevent update.
 var timer = null;
-function debounce(fn, root, delay) {
+function debounce(fn, node, delay) {
   return function () {
     clearTimeout(timer);
-    timer = setTimeout(function () { fn(root); }, delay);
+    timer = setTimeout(function () { fn(node); }, delay);
   };
 } // end debounce
 
 // Remove the old scenegraph and create a new one.
-function fullfillUpdate(root) {
+function fullfillUpdate(node) {
   console.log("Update scenegraph.");
   d3.select("#scenegraph").selectAll("*").remove();
-  extractScenegraph(root);
+  extractScenegraph(node);
 } // end fullfillUpdate
 
 // Wait until DELAY has passed without end-user interaction 
@@ -200,7 +199,7 @@ function extractScenegraph(node) {
     // If the CURRENT node is a GROUP mark.
     if(currentNode.marktype != undefined) {
       var obj = {"name": getID(currentNode), 
-                 "parent": /*currentNode.group._id,*/ getID(currentNode.group),
+                 "parent": getID(currentNode.group),
                  "type": currentNode.marktype,
                  "data": currentNode.bounds};
       nodes.push(obj);
@@ -208,7 +207,7 @@ function extractScenegraph(node) {
     
     // If the CURRENT node is an ITEM.
     } else {
-      var obj = {"name": /*currentNode._id, */ getID(currentNode),
+      var obj = {"name": getID(currentNode),
                  "parent": getID(currentNode.mark),
                  "data": getDataObj(currentNode)};
       nodes.push(obj);
@@ -250,14 +249,13 @@ function processDiff() {
     // the same name as the input node (i.e. name should be unique)
     if(matchingNodes.length > 1) {
       console.log("ERROR: Multiple children");
-      console.log(matchingNodes)
+      console.log(matchingNodes);
     }
     if(matchingNodes.length == 0) {
       node.status = "added";
     } else if(matchingNodes[0].status && matchingNodes[0].status == "removed") {
-      console.log("Matched a removed node.");
-      // TODO: If this happens, we need to figure out what the proper
-      //       way to handle this is.
+      // Last time, the node had been removed, so now it has been re-added.
+      node.status = "added";
     } else if(matchingNodes[0].data && dataChanged(matchingNodes[0].data, node.data)) {
       if(matchingNodes[0].collapsed != undefined) {
         node.collapsed = matchingNodes[0].collapsed;
@@ -277,8 +275,9 @@ function processDiff() {
     var newNode = newData.filter(function(d) {
       if(d.name == oldNode.name) return d;
     });
-    if(newNode.length == 0) {
-      console.log("Node removed!")
+    if(newNode.length == 0 && (!oldNode.status || oldNode.status != "removed")) {
+      //console.log("Node removed!", oldNode.parent instanceof Object);
+      //if(oldNode.parent instanceof Object) oldNode.parent = oldNode.parent.name;
       oldNode.status = "removed";
       newData.push(oldNode);
     }
@@ -293,19 +292,27 @@ function drawGraph(nodes) {
   if(oldData) processDiff();
 
   // Structure the nodes appropriately.
-  var dataMap = nodes.reduce(function(map, node) {
+  var data = JSON.parse(JSON.stringify(newData)); // Copies the object.
+  var dataMap = data.reduce(function(map, node) {
     map[node.name] = node;
     return map;
   }, {});
 
   treeData = [];
-    nodes.forEach(function(node) {
-      var parent = dataMap[node.parent];
-      if (parent) {
+  data.forEach(function(node) {
+    var parent = dataMap[node.parent];
+    if (parent) {
+      (parent.children || (parent.children = [])).push(node);
+    } else {
+      if(node.parent instanceof Object) {
+        console.log("This never happens, remove me!");
+        parent = dataMap[node.parent.name];
         (parent.children || (parent.children = [])).push(node);
       } else {
         treeData.push(node);
       }
+
+    }
   });
 
   var margin = {top: 20, right: 05, bottom: 20, left: 05};
@@ -353,12 +360,12 @@ function update(source) {
   var nodeEnter = node.enter().append("g")
       .attr("class", "node")
       .attr("transform", function(d) { return "translate(" + source.x0 + "," + source.y0 + ")"; })
-      .on("click", function(d) {
+      .on("dblclick", function(d) {
         // TODO: figure out how to disable this for double click.
         if(d.data) console.log(d.name + ":", d.data)
         else console.log(d.name)
       })
-      .on("dblclick", collapseNode);
+      .on("click", collapseNode);
 
   nodeEnter.append("circle")
       .attr("r", 1e-6)
@@ -478,7 +485,7 @@ function partialCollapse(d) {
 // recursively collpase the grandchildren.
 function collapse(d) {
   if(d.children) {
-    setCollapsed(d, true);
+    //setCollapsed(d, true);
     d._children = d.children;
     d._children.forEach(collapse);
     d.children = null;
@@ -487,7 +494,7 @@ function collapse(d) {
 
 function expand(d) {
   if(d._children) {
-    setCollapsed(d, false);
+    //setCollapsed(d, false);
     d.children = d._children;
     d.children.forEach(expand);
     d._children = null;
