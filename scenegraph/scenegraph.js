@@ -39,8 +39,15 @@
  *
  */
 
-var oldData, newData, treeData, i, duration, root, tree, svg, diagonal;
+var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
+
+/*************************************************************/
+/*************************** Flags ***************************/
+/*************************************************************/
 var init = false;
+var showAxis = true;
+var showLegend = true;
+var ignoreDiff = false;
 
 /*************************************************************/
 /************************* Constants *************************/
@@ -186,6 +193,7 @@ function extractScenegraph(node) {
     newData = null;
   }
   init = false;
+  rootNode = node;
 
   // Save information about root node and prepare for tree traversal
   var nodes = [];
@@ -212,8 +220,11 @@ function extractScenegraph(node) {
                  "data": getDataObj(currentNode)};
       nodes.push(obj);
 
-      if(currentNode.axisItems != undefined && currentNode.axisItems.length != 0) {
+      if(showAxis && currentNode.axisItems != undefined && currentNode.axisItems.length != 0) {
         nodesToCheck = nodesToCheck.concat(currentNode.axisItems);
+      }
+      if(showLegend && currentNode.legendItems != undefined && currentNode.legendItems.length != 0) {
+        nodesToCheck = nodesToCheck.concat(currentNode.legendItems);
       }
       if(currentNode.items != undefined && currentNode.items.length != 0) {
         nodesToCheck = nodesToCheck.concat(currentNode.items);
@@ -236,6 +247,17 @@ function dataChanged(oldDataObj, newDataObj) {
   });
   return somethingChanged;
 } // end dataChanged
+
+function maintainCollapse() {
+  newData.forEach(function(node) {
+    var matchingNodes = oldData.filter(function(oldNode) {
+      if(oldNode.name == node.name) return oldNode;
+    });
+    if(matchingNodes.length && matchingNodes[0].collapsed != undefined) {
+      node.collapsed = matchingNodes[0].collapsed;
+    }
+  });
+} // end maintainCollapse
 
 function processDiff() {
   // For all the new data, determine if updated or added.
@@ -266,7 +288,6 @@ function processDiff() {
       }
       node.status = "none";
     }
-
   });
 
   // For all the old data, determine if any nodes were removed.
@@ -286,7 +307,8 @@ function processDiff() {
 function drawGraph(nodes) {
   // Preprocess the data.
   newData = nodes.slice(0);
-  if(oldData) processDiff();
+  if(oldData && !ignoreDiff) processDiff();
+  if(ignoreDiff) maintainCollapse();
 
   // Structure the nodes appropriately.
   var data = JSON.parse(JSON.stringify(newData)); // Copies the object.
@@ -301,14 +323,7 @@ function drawGraph(nodes) {
     if (parent) {
       (parent.children || (parent.children = [])).push(node);
     } else {
-      if(node.parent instanceof Object) {
-        console.log("This never happens, remove me!");
-        parent = dataMap[node.parent.name];
-        (parent.children || (parent.children = [])).push(node);
-      } else {
-        treeData.push(node);
-      }
-
+      treeData.push(node);
     }
   });
 
@@ -336,7 +351,6 @@ function drawGraph(nodes) {
   root.y0 = height / 2;
 
   partialCollapse(root);
-  //TODO: partialCollapse(root);
   update(root);
 
   d3.select(self.frameElement).style("height", "800px");
@@ -548,3 +562,33 @@ function autoCollapse() {
   partialCollapse(root);
   update(root);
 } // end autoCollapse
+
+function toggleAxis() {
+  var button = d3.select("#btn_scene_toggleAxis")[0][0];
+  if(button.value == "Remove Axis") {
+    button.value = "Show Axis";
+    showAxis = false;
+  } else {
+    button.value = "Remove Axis";
+    showAxis = true;
+  }
+  ignoreDiff = true;
+  fullfillUpdate(rootNode);
+  ignoreDiff = false;
+  //update(root);
+} // end toggleAxis
+
+function toggleLegend() {
+  var button = d3.select("#btn_scene_toggleLegend")[0][0];
+  if(button.value == "Remove Legend") {
+    button.value = "Show Legend";
+    showLegend = false;
+  } else {
+    button.value = "Remove Legend";
+    showLegend = true;
+  }
+  ignoreDiff = true;
+  fullfillUpdate(rootNode);
+  ignoreDiff = false;
+  //update(root);
+} // end toggleAxis
