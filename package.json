@@ -36,7 +36,8 @@
     "watchify": "^3.1.0",
     "webdriverio": "^2.4.5",
     "xmldom": "^0.1.19",
-    "xpath": "^0.0.9"
+    "xpath": "^0.0.9",
+    "z-schema": "^3.9.5"
   },
   "scripts": {
     "test": "gulp test"

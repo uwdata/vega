@@ -117,7 +117,7 @@
           "x": {"scale": "x", "field": "miles"},
           "y": {"scale": "y", "field": "gas"},
           "fill": {"value": "#fff"},
-          "stroke": {"value": 1},
+          "stroke": {"value": "#000"},
           "strokeWidth": {"value": 1},
           "size": {"value": 49}
         }
