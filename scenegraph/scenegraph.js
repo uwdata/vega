@@ -40,6 +40,7 @@
  */
 
 var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
+var margin, width, height;
 
 /*************************************************************/
 /*************************** Flags ***************************/
@@ -90,6 +91,18 @@ function fullfillUpdate(node) {
 // Wait until DELAY has passed without end-user interaction 
 // before updating the scenegraph.
 function updateScenegraph() {
+  // TODO: remove hard coding.
+  d3.select("#scenegraph").selectAll("rect").remove();
+  var rectWidth = d3.select("#scenegraph")[0][0].offsetWidth;
+  var rectHeight = d3.select("#scenegraph")[0][0].offsetHeight;
+  svg.append("rect")
+      .attr("x", -50)
+      .attr("y", -100)
+      .attr("width", rectWidth + 50)  
+      .attr("height", rectHeight + 100)
+      .style("fill", "#FBFBFB")
+      .style("fill-opacity", 0.75);
+
   debounce(fullfillUpdate, this, DELAY)();
 } // end updateScenegraph
 
@@ -327,9 +340,9 @@ function drawGraph(nodes) {
     }
   });
 
-  var margin = {top: 20, right: 05, bottom: 20, left: 05};
-  var width = d3.select("#vis")[0][0].offsetWidth - margin.right - margin.left;
-  var height = 800 - margin.top - margin.bottom;
+  margin = {top: 20, right: 05, bottom: 20, left: 05};
+  width = d3.select("#vis")[0][0].offsetWidth - margin.right - margin.left;
+  height = 800 - margin.top - margin.bottom;
     
   i = 0;
   duration = 750;
@@ -575,7 +588,6 @@ function toggleAxis() {
   ignoreDiff = true;
   fullfillUpdate(rootNode);
   ignoreDiff = false;
-  //update(root);
 } // end toggleAxis
 
 function toggleLegend() {
@@ -590,5 +602,4 @@ function toggleLegend() {
   ignoreDiff = true;
   fullfillUpdate(rootNode);
   ignoreDiff = false;
-  //update(root);
 } // end toggleAxis
