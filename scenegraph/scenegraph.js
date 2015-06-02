@@ -224,7 +224,6 @@ function extractScenegraph(node) {
   drawGraph(nodes);
 } // end extractScenegraph
 
-
 /*************************************************************/
 /********************** Draw Scenegraph **********************/
 /*************************************************************/
@@ -276,8 +275,6 @@ function processDiff() {
       if(d.name == oldNode.name) return d;
     });
     if(newNode.length == 0 && (!oldNode.status || oldNode.status != "removed")) {
-      //console.log("Node removed!", oldNode.parent instanceof Object);
-      //if(oldNode.parent instanceof Object) oldNode.parent = oldNode.parent.name;
       oldNode.status = "removed";
       newData.push(oldNode);
     }
@@ -339,6 +336,7 @@ function drawGraph(nodes) {
   root.y0 = height / 2;
 
   partialCollapse(root);
+  //TODO: partialCollapse(root);
   update(root);
 
   d3.select(self.frameElement).style("height", "800px");
@@ -365,7 +363,7 @@ function update(source) {
         if(d.data) console.log(d.name + ":", d.data)
         else console.log(d.name)
       })
-      .on("click", collapseNode);
+      .on("click", toggle);
 
   nodeEnter.append("circle")
       .attr("r", 1e-6)
@@ -461,78 +459,92 @@ function update(source) {
   });
 } // end update
 
+/*************************************************************/
+/********************** Show/Hide Nodes **********************/
+/*************************************************************/
+
+function numChildren(d) {
+  if(!d.children) return 0;
+  var leaves = d.children.filter(function(child) {
+    if(!child.children || child.children.length == 0) return child;
+  });
+  return leaves.length;
+} // end numChildren
+
 // TODO: update functionality to look for repeated patterns in the
 //       structure of the scenegraph and collapse regularly repeated
 //       structures (e.g. scatterplot matrix)
 function partialCollapse(d) {
-  if(d.children) {
-    // Determine how many of the children are leaf nodes
-    var leaves = d.children.filter(function(child) {
-      if(!child.children || child.children.length == 0) return child;
-    });
-
-    // Check the previous collapsed status of the node.
-    if(d.collapsed != undefined && !d.collapsed) d.children.forEach(partialCollapse);
-    else if(d.collapsed) collapse(d);
-    // If most of the children are leaf nodes, collapse the node.
-    else if(leaves.length >= AUTO_COLLAPSE_THREASHOLD) collapse(d);
-    // Otherwise, leave the node visible and recurse.
-    else d.children.forEach(partialCollapse);
+  if(d.collapsed != undefined && d.collapsed) {
+      collapse(d);
+  } else if(d.collapsed != undefined && !d.collapsed) {
+    expand(d);
+    if(d.children) d.children.forEach(partialCollapse);
+  } else if(numChildren(d) >= AUTO_COLLAPSE_THREASHOLD) {
+    collapse(d);
+  } else {
+    expand(d);
+    if(d.children) d.children.forEach(partialCollapse);
   }
 } // end partialCollapse
 
-// If the node has children, hide the children and
-// recursively collpase the grandchildren.
+// Hide the children of the input node.
 function collapse(d) {
+  setCollapsed(d, true);
   if(d.children) {
-    //setCollapsed(d, true);
     d._children = d.children;
-    d._children.forEach(collapse);
     d.children = null;
   }
 } // end collapse
 
+// Unhide the children of the input node.
 function expand(d) {
+  setCollapsed(d, false);
   if(d._children) {
-    //setCollapsed(d, false);
-    d.children = d._children;
-    d.children.forEach(expand);
-    d._children = null;
-  } /*else if (d.children) {
-    d.children.forEach(expand);
-  }*/ //TODO: figure out why this is here.
-} // end expand
-
-// Toggle collapsed status of node.
-function collapseNode(d) {
-  if (d.children) { // Collapse the node.
-    setCollapsed(d, true);
-    d._children = d.children;
-    d.children = null;
-  } else { // Expand the node.
-    setCollapsed(d, false);
     d.children = d._children;
     d._children = null;
   }
+} // end expand
+
+// Unhide the children of the input node and all grandchildren.
+function expandAll(d) {
+  if(d._children) expand(d);
+  if(d.children) d.children.forEach(expandAll);
+} // end expandAll
+
+// Toggle collapsed status of node.
+function toggle(d) {
+  if (d.children) collapse(d);
+  else expand(d);
   update(d);
-} // end collapseNode
+} // end toggle
 
 function setCollapsed(d, collapsed) {
+  d.collapsed = collapsed;
   newData.forEach(function(node) {
     if(node.name == d.name) node.collapsed = collapsed;
   });
 } // end setCollapsed
 
+function resetCollapsed(node) {
+  setCollapsed(node, null);
+  if(node.children) node.children.forEach(resetCollapsed);
+  if(node._children) node._children.forEach(resetCollapsed);
+} // end resetCollapsed
+
+/*************************************************************/
+/********************** IDE Interaction **********************/
+/*************************************************************/
+
 // Hide or show all nodes from button click.
-function toggle() {
-  var button = d3.select("#btn_scene_show")[0][0];
-  if(button.value == "Hide All") {
-    button.value = "Show All";
-    collapse(root);
-    update(root)
-  } else {
-    button.value = "Hide All";
-    expand(root);
-    update(root)
-  }
-} // end toggle
+function showAll() {
+  expandAll(root);
+  update(root);
+} // end showAll
+
+function autoCollapse() {
+  expandAll(root);
+  resetCollapsed(root);
+  partialCollapse(root);
+  update(root);
+} // end autoCollapse
