@@ -39,9 +39,13 @@
  *
  */
 
-var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal, color;
-var binnedChange;
+var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
+var aggregateChange;
 var margin, width, height;
+
+var color = d3.scale.ordinal()
+    .range(["white", "#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", "#fd8d3c",
+            "#f16913", "#d94801", "#a63603", "#7f2704"]);
 
 /*************************************************************/
 /*************************** Flags ***************************/
@@ -273,9 +277,26 @@ function maintainCollapse() {
   });
 } // end maintainCollapse
 
-function processDiff() {
+function getColorValue(d) {
+  // If the input node is collapsed, aggregate the amount of
+  // change for all internal nodes. Otherwise, the color should
+  // just be based on whether or not the node itself changed.
+  if(d.collapsed != undefined && d.collapsed) {
+    if(aggregateChange[d.name] == undefined) return 0;
+    var step = color.domain()[1];
+    var value = Math.floor(aggregateChange[d.name] / step) * step;
+    if(value > color.domain()[9]) value = color.domain()[9];
+    return value;
+  } else {
+    return 0;
+  }
+} // end getColorValue
 
+function processDiff() {
+  // Record the number of children that change (are modified
+  // in some way) for each parent.
   var map = {};
+  var numChildren = {};
 
   // For all the new data, determine if updated or added.
   newData.forEach(function(node) {
@@ -302,6 +323,7 @@ function processDiff() {
     if(node.status != "none") {
       map[node.parent] = (map[node.parent] + 1) || 1;
     }
+    numChildren = (numChildren[node.parent] + 1) || 1;
   });
 
   // For all the old data, determine if any nodes were removed.
@@ -313,44 +335,42 @@ function processDiff() {
       oldNode.status = "removed";
       newData.push(oldNode);
       map[oldNode.parent] = (map[oldNode.parent] + 1) || 1;
+      numChildren[oldNode.parent] = (numChildren[node.parent] + 1) || 1;
     }
   });
 
-  console.log(map)
-  var aggregateChange = {};
-  // Compute the "amount" of change.
+  // Compute the "amount" of change for each node based on the
+  // children of the node.
+  aggregateChange = {};
+  numDescendants = {};
   Object.keys(map).forEach(function(key) {
     var levels = key.split(".");
     var currentKey = levels[0];
     for (var i = 1; i <= levels.length; i++) {
-      aggregateChange[currentKey] = aggregateChange[currentKey] + map[key] || map[key];
+      aggregateChange[currentKey] = aggregateChange[currentKey] + map[key] || map[key] || 0;
+      numDescendants[currentKey] = numDescendants[currentKey] + numChildren[key] || numChildren[key] || 0;
       currentKey += "." + levels[i];
     };
   });
 
+  // TODO: Fine-tune the size and heatmap color of nodes.
+  //       I think that the size of nodes should be based on the
+  //       number of descendants in that node and should be
+  //       comprable between nodes (i.e. if you collapse the root
+  //       node it will be largest node ever seen on the graph).
+  //       I think that the COLOR of the nodes should be based on
+  //       the percentage change of the descendants (i.e. a dark
+  //       node implies that ALL internal nodes have been updated.)
+
+  // Determine the max amount of change and create a color scale.
   var max = 0;
-  Object.keys(aggregateChange).forEach(function(key) {
-    if(aggregateChange[key] > max) max = aggregateChange[key];
+  Object.keys(map).forEach(function(key) {
+    if(map[key] > max) max = map[key];
   });
-
-  // max = 333
-  // step = 37
-  // domain = [0, 37, 74, 111, 148, 185, 222, 259, 296]
-  //           1   2   3   4    5    6    7   8     9
-
-  // input = 98
-
-  var step = max / 9;
-  color.domain([0, step, step*2, step*3, step*4, step*5, step*6, step*7, step*8]);
-
-  binnedChange = {};
-  Object.keys(aggregateChange).forEach(function(key) {
-    binnedChange[key] = Math.floor(aggregateChange[key] / step) * step;
-  });
-
-  console.log(aggregateChange)
-  console.log("FINAL", binnedChange);
-
+  if(max != 0) {
+    var step = max / 10;
+    color.domain([0, step, step*2, step*3, step*4, step*5, step*6, step*7, step*8, step*9]);
+  }
 } // end processDiff
 
 // BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
@@ -400,10 +420,6 @@ function drawGraph(nodes) {
   root = treeData[0];
   root.x0 = 0;
   root.y0 = height / 2;
-
-  color = d3.scale.ordinal()
-    .range(["#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", "#fd8d3c",
-            "#f16913", "#d94801", "#a63603", "#7f2704"]);
 
   partialCollapse(root);
   update(root);
@@ -480,11 +496,8 @@ function update(source) {
         return "lightsteelblue";
       })
       .style("fill", function(d) { 
-        if(binnedChange) {
-          var value = binnedChange[d.name] || 0;
-          return color(value) || "white"; 
-        }
-        return "white";
+        if(aggregateChange) return color(getColorValue(d));
+        return color(0);
       })
       //.style("stroke", function(d) { return d._children ? "black" : "lightsteelblue"; })
       .style("stroke-width", function(d) { return d._children ? 2 : 1; });
