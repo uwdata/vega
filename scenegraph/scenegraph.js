@@ -39,7 +39,8 @@
  *
  */
 
-var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
+var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal, color;
+var binnedChange;
 var margin, width, height;
 
 /*************************************************************/
@@ -273,18 +274,15 @@ function maintainCollapse() {
 } // end maintainCollapse
 
 function processDiff() {
+
+  var map = {};
+
   // For all the new data, determine if updated or added.
   newData.forEach(function(node) {
     var matchingNodes = oldData.filter(function(oldNode) {
       if(oldNode.name == node.name) return oldNode;
     });
 
-    // We would expect the oldData to only have ONE node with
-    // the same name as the input node (i.e. name should be unique)
-    if(matchingNodes.length > 1) {
-      console.log("ERROR: Multiple children");
-      console.log(matchingNodes);
-    }
     if(matchingNodes.length == 0) {
       node.status = "added";
     } else if(matchingNodes[0].status && matchingNodes[0].status == "removed") {
@@ -301,6 +299,9 @@ function processDiff() {
       }
       node.status = "none";
     }
+    if(node.status != "none") {
+      map[node.parent] = (map[node.parent] + 1) || 1;
+    }
   });
 
   // For all the old data, determine if any nodes were removed.
@@ -311,8 +312,45 @@ function processDiff() {
     if(newNode.length == 0 && (!oldNode.status || oldNode.status != "removed")) {
       oldNode.status = "removed";
       newData.push(oldNode);
+      map[oldNode.parent] = (map[oldNode.parent] + 1) || 1;
     }
   });
+
+  console.log(map)
+  var aggregateChange = {};
+  // Compute the "amount" of change.
+  Object.keys(map).forEach(function(key) {
+    var levels = key.split(".");
+    var currentKey = levels[0];
+    for (var i = 1; i <= levels.length; i++) {
+      aggregateChange[currentKey] = aggregateChange[currentKey] + map[key] || map[key];
+      currentKey += "." + levels[i];
+    };
+  });
+
+  var max = 0;
+  Object.keys(aggregateChange).forEach(function(key) {
+    if(aggregateChange[key] > max) max = aggregateChange[key];
+  });
+
+  // max = 333
+  // step = 37
+  // domain = [0, 37, 74, 111, 148, 185, 222, 259, 296]
+  //           1   2   3   4    5    6    7   8     9
+
+  // input = 98
+
+  var step = max / 9;
+  color.domain([0, step, step*2, step*3, step*4, step*5, step*6, step*7, step*8]);
+
+  binnedChange = {};
+  Object.keys(aggregateChange).forEach(function(key) {
+    binnedChange[key] = Math.floor(aggregateChange[key] / step) * step;
+  });
+
+  console.log(aggregateChange)
+  console.log("FINAL", binnedChange);
+
 } // end processDiff
 
 // BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
@@ -363,6 +401,10 @@ function drawGraph(nodes) {
   root.x0 = 0;
   root.y0 = height / 2;
 
+  color = d3.scale.ordinal()
+    .range(["#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", "#fd8d3c",
+            "#f16913", "#d94801", "#a63603", "#7f2704"]);
+
   partialCollapse(root);
   update(root);
 
@@ -386,16 +428,16 @@ function update(source) {
       .attr("class", "node")
       .attr("transform", function(d) { return "translate(" + source.x0 + "," + source.y0 + ")"; })
       .on("dblclick", function(d) {
-        // TODO: figure out how to disable this for double click.
         if(d.data) console.log(d.name + ":", d.data)
         else console.log(d.name)
       })
       .on("click", toggle);
 
   nodeEnter.append("circle")
-      .attr("r", 1e-6)
-      .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; })
-      .style("stroke", "lightsteelblue");
+      .attr("r", 1e-6);
+      //.style("fill", function(d) { return d._children ? "#fff" : "#fff"; })
+      //.style("stroke", "lightsteelblue")
+      //.style("stroke-width", function(d) { return d._children ? 0.5 : 1; });
 
   nodeEnter.append("text")
       .attr("y", function(d) { return d.children || d._children ? -12 : 12; })
@@ -421,14 +463,31 @@ function update(source) {
   }
 
   nodeUpdate.select("circle")
-      .attr("r", 4.5)
+      .attr("r", function(d) {
+        // TODO: fine-tune this.
+        if(d._children) {
+          var num = d._children.length;
+          if(num >= AUTO_COLLAPSE_THREASHOLD * 4) return 6.5;
+          if(num >= AUTO_COLLAPSE_THREASHOLD * 2) return 5.5;
+          return 4.5;
+        }
+        return 3.5;
+      })
       .style("stroke", function(d) {
         if(d.status == "added") return "limegreen";
         if(d.status == "removed") return "red";
         if(d.status == "updated") return "orange";
         return "lightsteelblue";
       })
-      .style("fill", function(d) { return d._children ? "lightsteelblue" : "#fff"; });
+      .style("fill", function(d) { 
+        if(binnedChange) {
+          var value = binnedChange[d.name] || 0;
+          return color(value) || "white"; 
+        }
+        return "white";
+      })
+      //.style("stroke", function(d) { return d._children ? "black" : "lightsteelblue"; })
+      .style("stroke-width", function(d) { return d._children ? 2 : 1; });
 
   nodeUpdate.select("text")
       .style("fill-opacity", 1);
@@ -576,6 +635,7 @@ function autoCollapse() {
   update(root);
 } // end autoCollapse
 
+// TODO: figure out how to support transitions
 function toggleAxis() {
   var button = d3.select("#btn_scene_toggleAxis")[0][0];
   if(button.value == "Remove Axis") {
@@ -588,8 +648,10 @@ function toggleAxis() {
   ignoreDiff = true;
   fullfillUpdate(rootNode);
   ignoreDiff = false;
+  update(root);
 } // end toggleAxis
 
+// TODO: figure out how to support transitions
 function toggleLegend() {
   var button = d3.select("#btn_scene_toggleLegend")[0][0];
   if(button.value == "Remove Legend") {
