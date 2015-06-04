@@ -40,12 +40,13 @@
  */
 
 var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
-var aggregateChange;
+var aggregateChange, numDescendants;
 var margin, width, height;
 
 var color = d3.scale.ordinal()
-    .range(["white", "#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", "#fd8d3c",
-            "#f16913", "#d94801", "#a63603", "#7f2704"]);
+    .range(["white", "#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", 
+            "#fd8d3c", "#f16913", "#d94801", "#a63603", "#7f2704"])
+    .domain([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
 
 /*************************************************************/
 /*************************** Flags ***************************/
@@ -257,15 +258,6 @@ function extractScenegraph(node) {
 /********************** Draw Scenegraph **********************/
 /*************************************************************/
 
-function dataChanged(oldDataObj, newDataObj) {
-  var somethingChanged = false;
-  //TODO: see if we can break out of this loop early.
-  Object.keys(newDataObj).forEach(function(key) {
-    if(newDataObj[key] != oldDataObj[key]) somethingChanged = true;
-  });
-  return somethingChanged;
-} // end dataChanged
-
 function maintainCollapse() {
   newData.forEach(function(node) {
     var matchingNodes = oldData.filter(function(oldNode) {
@@ -277,26 +269,65 @@ function maintainCollapse() {
   });
 } // end maintainCollapse
 
+function computeDescendants(data) {
+  var numChildren = {};
+  numDescendants = {};
+
+  // Create a map of the number of children for each node.
+  data.forEach(function(node) {
+    numChildren[node.parent] = (numChildren[node.parent] + 1) || 1;
+  });
+
+  // Aggregate counts to determine the number of descendants.
+  Object.keys(numChildren).forEach(function(key) {
+    var levels = key.split(".");
+    var currentKey = levels[0];
+    for (var i = 1; i <= levels.length; i++) {
+      numDescendants[currentKey] = numDescendants[currentKey] + numChildren[key] || numChildren[key] || 0;
+      currentKey += "." + levels[i];
+    };
+  });
+} // end computeDescendants
+
+function getNodeSize(d) {
+  // TODO: fine-tune this more.
+  if(d._children) {
+    var num = numDescendants[d.name];
+    if(num >= AUTO_COLLAPSE_THREASHOLD * 8) return 7.5;
+    if(num >= AUTO_COLLAPSE_THREASHOLD * 4) return 6.5;
+    if(num >= AUTO_COLLAPSE_THREASHOLD * 2) return 5.5;
+    return 4.5;
+  }
+  return 3.5;
+} // getNodeSize
+
 function getColorValue(d) {
   // If the input node is collapsed, aggregate the amount of
-  // change for all internal nodes. Otherwise, the color should
-  // just be based on whether or not the node itself changed.
+  // change for all internal nodes. Otherwise, the fill color
+  // should be white.
   if(d.collapsed != undefined && d.collapsed) {
     if(aggregateChange[d.name] == undefined) return 0;
-    var step = color.domain()[1];
-    var value = Math.floor(aggregateChange[d.name] / step) * step;
-    if(value > color.domain()[9]) value = color.domain()[9];
-    return value;
+    var percentage = Math.floor((aggregateChange[d.name] / numDescendants[d.name])*10)*10;
+    if(percentage == 100) return 90; // Everything over 90 should have the darkest color.
+    return percentage;
   } else {
     return 0;
   }
 } // end getColorValue
 
+function dataChanged(oldDataObj, newDataObj) {
+  var somethingChanged = false;
+  //TODO: see if we can break out of this loop early.
+  Object.keys(newDataObj).forEach(function(key) {
+    if(newDataObj[key] != oldDataObj[key]) somethingChanged = true;
+  });
+  return somethingChanged;
+} // end dataChanged
+
 function processDiff() {
   // Record the number of children that change (are modified
   // in some way) for each parent.
   var map = {};
-  var numChildren = {};
 
   // For all the new data, determine if updated or added.
   newData.forEach(function(node) {
@@ -323,7 +354,6 @@ function processDiff() {
     if(node.status != "none") {
       map[node.parent] = (map[node.parent] + 1) || 1;
     }
-    numChildren = (numChildren[node.parent] + 1) || 1;
   });
 
   // For all the old data, determine if any nodes were removed.
@@ -335,42 +365,20 @@ function processDiff() {
       oldNode.status = "removed";
       newData.push(oldNode);
       map[oldNode.parent] = (map[oldNode.parent] + 1) || 1;
-      numChildren[oldNode.parent] = (numChildren[node.parent] + 1) || 1;
     }
   });
 
   // Compute the "amount" of change for each node based on the
   // children of the node.
   aggregateChange = {};
-  numDescendants = {};
   Object.keys(map).forEach(function(key) {
     var levels = key.split(".");
     var currentKey = levels[0];
     for (var i = 1; i <= levels.length; i++) {
       aggregateChange[currentKey] = aggregateChange[currentKey] + map[key] || map[key] || 0;
-      numDescendants[currentKey] = numDescendants[currentKey] + numChildren[key] || numChildren[key] || 0;
       currentKey += "." + levels[i];
     };
   });
-
-  // TODO: Fine-tune the size and heatmap color of nodes.
-  //       I think that the size of nodes should be based on the
-  //       number of descendants in that node and should be
-  //       comprable between nodes (i.e. if you collapse the root
-  //       node it will be largest node ever seen on the graph).
-  //       I think that the COLOR of the nodes should be based on
-  //       the percentage change of the descendants (i.e. a dark
-  //       node implies that ALL internal nodes have been updated.)
-
-  // Determine the max amount of change and create a color scale.
-  var max = 0;
-  Object.keys(map).forEach(function(key) {
-    if(map[key] > max) max = map[key];
-  });
-  if(max != 0) {
-    var step = max / 10;
-    color.domain([0, step, step*2, step*3, step*4, step*5, step*6, step*7, step*8, step*9]);
-  }
 } // end processDiff
 
 // BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
@@ -378,6 +386,7 @@ function processDiff() {
 function drawGraph(nodes) {
   // Preprocess the data.
   newData = nodes.slice(0);
+  computeDescendants(newData);
   if(oldData && !ignoreDiff) processDiff();
   if(ignoreDiff) maintainCollapse();
 
@@ -479,28 +488,21 @@ function update(source) {
   }
 
   nodeUpdate.select("circle")
-      .attr("r", function(d) {
-        // TODO: fine-tune this.
-        if(d._children) {
-          var num = d._children.length;
-          if(num >= AUTO_COLLAPSE_THREASHOLD * 4) return 6.5;
-          if(num >= AUTO_COLLAPSE_THREASHOLD * 2) return 5.5;
-          return 4.5;
-        }
-        return 3.5;
-      })
+      .attr("r", getNodeSize)
       .style("stroke", function(d) {
         if(d.status == "added") return "limegreen";
         if(d.status == "removed") return "red";
         if(d.status == "updated") return "orange";
+        if(d._children) return "black";
         return "lightsteelblue";
       })
+      .style("stroke-width", function(d) { return d._children ? 1.5 : 1; })
       .style("fill", function(d) { 
-        if(aggregateChange) return color(getColorValue(d));
+        if(aggregateChange) {
+          return color(getColorValue(d));
+        }
         return color(0);
-      })
-      //.style("stroke", function(d) { return d._children ? "black" : "lightsteelblue"; })
-      .style("stroke-width", function(d) { return d._children ? 2 : 1; });
+      });
 
   nodeUpdate.select("text")
       .style("fill-opacity", 1);
