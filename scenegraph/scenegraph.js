@@ -39,9 +39,11 @@
  *
  */
 
-var oldData, newData, treeData, i, duration, root, rootNode, tree, svg, diagonal;
+var oldData, newData, treeData, root, rootNode, tree, svg, diagonal;
 var aggregateChange, numDescendants;
 var margin, width, height;
+
+var ved, padding;
 
 var color = d3.scale.ordinal()
     .range(["white", "#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", 
@@ -55,12 +57,16 @@ var init = false;
 var showAxis = true;
 var showLegend = true;
 var ignoreDiff = false;
+var inspection = false;
 
 /*************************************************************/
 /************************* Constants *************************/
 /*************************************************************/
 var AUTO_COLLAPSE_THREASHOLD = 7;
-var DELAY = 500;
+var DELAY = 1000;
+var TRANSITION_DELAY = 400;
+var i = 0;
+var duration = 750;
 
 /*************************************************************/
 /**************** End-User Scenegraph Update *****************/
@@ -76,6 +82,11 @@ var DELAY = 500;
 //       waits for the scenegraph to update, and then goes to
 //       interact with the scenegraph, it will then update
 //       again to remove the interesting highlighting.
+
+// TODO: Make it so that a diff is NOT computed when the user
+//       changes the specification via dropdown. (NOTE: this
+//       functionality is interesting when the user just
+//       modifies and parses the specification.)
 
 // BASED ON: https://remysharp.com/2010/07/21/throttling-function-calls
 // Reset delay each time debounce is called to prevent update.
@@ -98,19 +109,57 @@ function fullfillUpdate(node) {
 // before updating the scenegraph.
 function updateScenegraph() {
   // TODO: remove hard coding.
-  d3.select("#scenegraph").selectAll("rect").remove();
-  var rectWidth = d3.select("#scenegraph")[0][0].offsetWidth;
-  var rectHeight = d3.select("#scenegraph")[0][0].offsetHeight;
-  svg.append("rect")
-      .attr("x", -50)
-      .attr("y", -100)
-      .attr("width", rectWidth + 50)  
-      .attr("height", rectHeight + 100)
-      .style("fill", "#FBFBFB")
-      .style("fill-opacity", 0.75);
+  if(!inspection) {
+    d3.select("#scenegraph").selectAll("rect").remove();
+    var rectWidth = d3.select("#scenegraph")[0][0].offsetWidth;
+    var rectHeight = d3.select("#scenegraph")[0][0].offsetHeight;
+    svg.append("rect")
+        .attr("x", -50)
+        .attr("y", -100)
+        .attr("width", rectWidth + 50)  
+        .attr("height", rectHeight + 100)
+        .style("fill", "#FBFBFB")
+        .style("fill-opacity", 0.75);
 
-  debounce(fullfillUpdate, this, DELAY)();
+    debounce(fullfillUpdate, this, DELAY)();
+  }
 } // end updateScenegraph
+
+function sceneInit(context) {
+  ved = context;
+  padding = ved.view.model()._defs.padding;
+  ved.view._handler.on("click", function(evt) { 
+    if(inspection) {
+      var x = evt.layerX - padding.left;
+      var y = evt.layerY - padding.top;
+      var point = new vg.Bounds().set(x, y, x, y)
+      newData.forEach(function(node) {
+        node.userSelect = null;
+        // TODO: This bound calculation is not quite working. The
+        //       bounds of various objects are often placed within
+        //       the context of their parents. The primary (broken)
+        //       example of this is the x-axis; the bounds of the
+        //       x-axis stretch from y = 199 to 222 BUT each of the
+        //       internal text marks has a y-bounds like 11 to 22.
+        //       Basically, this is 11 from the top of the axis
+        //       bounds. Therefore, when the check below is trying
+        //       to determine containment it fails because the
+        //       point is not compared in the same CONTEXT.
+        // TODO: Is the bound of a child ALWAYS based on the bounds
+        //       of the parent? If so, incorporate that assumption
+        //       into this bounds calculation.
+        if(node.bounds && node.bounds.encloses(point)) {
+          node.userSelect = true;
+        }
+      });
+      init = false;
+      computeTreeStructure(newData);
+      update(root);
+    }
+  });
+
+  extractScenegraph(ved.root);
+} // end sceneInit
 
 /*************************************************************/
 /******************** Extract Scenegraph *********************/
@@ -202,8 +251,8 @@ function getDataObj(currentNode) {
 
 /*
  * There are two types of nodes in the scenegraph, Group marks and Items.
- * GROUP: <name>, <parent>, <type>, <data>
- * ITEM:  <name>, <parent>, <data> 
+ * GROUP: <name>, <parent>, <type>, <bounds>
+ * ITEM:  <name>, <parent>, <data>, <bounds>
  */
 function extractScenegraph(node) {
   // Save the old data.
@@ -228,7 +277,7 @@ function extractScenegraph(node) {
       var obj = {"name": getID(currentNode), 
                  "parent": getID(currentNode.group),
                  "type": currentNode.marktype,
-                 "data": currentNode.bounds};
+                 "bounds": currentNode.bounds};
       nodes.push(obj);
       nodesToCheck = nodesToCheck.concat(currentNode.items);
     
@@ -236,7 +285,8 @@ function extractScenegraph(node) {
     } else {
       var obj = {"name": getID(currentNode),
                  "parent": getID(currentNode.mark),
-                 "data": getDataObj(currentNode)};
+                 "data": getDataObj(currentNode),
+                 "bounds": currentNode.bounds};
       nodes.push(obj);
 
       if(showAxis && currentNode.axisItems != undefined && currentNode.axisItems.length != 0) {
@@ -305,6 +355,8 @@ function getColorValue(d) {
   // If the input node is collapsed, aggregate the amount of
   // change for all internal nodes. Otherwise, the fill color
   // should be white.
+  // TODO: Maybe this should round UP instead of down so if only 
+  //       1% changes it is still visible.
   if(d.collapsed != undefined && d.collapsed) {
     if(aggregateChange[d.name] == undefined) return 0;
     var percentage = Math.floor((aggregateChange[d.name] / numDescendants[d.name])*10)*10;
@@ -317,9 +369,13 @@ function getColorValue(d) {
 
 function dataChanged(oldDataObj, newDataObj) {
   var somethingChanged = false;
-  //TODO: see if we can break out of this loop early.
+  // TODO: see if we can break out of this loop early.
+  // TODO: if the element is an object, need to recursively
+  //       check it. can probably just use this function?
   Object.keys(newDataObj).forEach(function(key) {
-    if(newDataObj[key] != oldDataObj[key]) somethingChanged = true;
+    if(newDataObj[key] != oldDataObj[key]) {
+      somethingChanged = true;
+    }
   });
   return somethingChanged;
 } // end dataChanged
@@ -344,6 +400,7 @@ function processDiff() {
       if(matchingNodes[0].collapsed != undefined) {
         node.collapsed = matchingNodes[0].collapsed;
       }
+      //console.log(matchingNodes[0].data, node.data)
       node.status = "updated";
     } else {
       if(matchingNodes[0].collapsed != undefined) {
@@ -364,6 +421,10 @@ function processDiff() {
     if(newNode.length == 0 && (!oldNode.status || oldNode.status != "removed")) {
       oldNode.status = "removed";
       newData.push(oldNode);
+      // TODO: the heatmap doesn't seem to be picking up nodes
+      //       when they are removed. Something weird is going on
+      //       with this part of the computation? (see index chart
+      //       node removal for example.)
       map[oldNode.parent] = (map[oldNode.parent] + 1) || 1;
     }
   });
@@ -381,15 +442,7 @@ function processDiff() {
   });
 } // end processDiff
 
-// BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
-//           http://bl.ocks.org/mbostock/4339083
-function drawGraph(nodes) {
-  // Preprocess the data.
-  newData = nodes.slice(0);
-  computeDescendants(newData);
-  if(oldData && !ignoreDiff) processDiff();
-  if(ignoreDiff) maintainCollapse();
-
+function computeTreeStructure(newData) {
   // Structure the nodes appropriately.
   var data = JSON.parse(JSON.stringify(newData)); // Copies the object.
   var dataMap = data.reduce(function(map, node) {
@@ -407,13 +460,24 @@ function drawGraph(nodes) {
     }
   });
 
+  root = treeData[0];
+  root.x0 = 0;
+  root.y0 = height / 2;
+} // end computeTreeStructure
+
+// BASED ON: http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
+//           http://bl.ocks.org/mbostock/4339083
+function drawGraph(nodes) {
+  // Preprocess the data.
+  newData = nodes.slice(0);
+  computeDescendants(newData);
+  if(oldData && !ignoreDiff) processDiff();
+  if(ignoreDiff) maintainCollapse();
+
   margin = {top: 20, right: 05, bottom: 20, left: 05};
   width = d3.select("#vis")[0][0].offsetWidth - margin.right - margin.left;
   height = 800 - margin.top - margin.bottom;
     
-  i = 0;
-  duration = 750;
-
   tree = d3.layout.tree()
       .size([width, height]);
 
@@ -426,10 +490,7 @@ function drawGraph(nodes) {
     .append("g")
       .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-  root = treeData[0];
-  root.x0 = 0;
-  root.y0 = height / 2;
-
+  computeTreeStructure(newData);
   partialCollapse(root);
   update(root);
 
@@ -453,7 +514,8 @@ function update(source) {
       .attr("class", "node")
       .attr("transform", function(d) { return "translate(" + source.x0 + "," + source.y0 + ")"; })
       .on("dblclick", function(d) {
-        if(d.data) console.log(d.name + ":", d.data)
+        //if(d.data) console.log(d.name + ":", d.data)
+        if (d.bounds) console.log(d.name + ":", d.bounds)
         else console.log(d.name)
       })
       .on("click", toggle);
@@ -481,6 +543,7 @@ function update(source) {
   var nodeUpdate;
   if(init) {
     nodeUpdate = node.transition()
+      .delay(TRANSITION_DELAY)
       .duration(duration)
       .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
   } else {
@@ -498,6 +561,9 @@ function update(source) {
       })
       .style("stroke-width", function(d) { return d._children ? 1.5 : 1; })
       .style("fill", function(d) { 
+        if(d.userSelect) {
+          return "pink"
+        }
         if(aggregateChange) {
           return color(getColorValue(d));
         }
@@ -509,6 +575,7 @@ function update(source) {
 
   // Transition exiting nodes to the parent's new position.
   var nodeExit = node.exit().transition()
+      .delay(TRANSITION_DELAY)
       .duration(duration)
       .attr("transform", function(d) { return "translate(" + source.x + "," + source.y + ")"; })
       .remove();
@@ -537,6 +604,7 @@ function update(source) {
   // Transition links to their new position.
   if(init) {
     link.transition()
+      .delay(TRANSITION_DELAY)
       .duration(duration)
       .attr("d", diagonal);
   } else {
@@ -546,6 +614,7 @@ function update(source) {
 
   // Transition exiting nodes to the parent's new position.
   link.exit().transition()
+      .delay(TRANSITION_DELAY)
       .duration(duration)
       .attr("d", function(d) {
         var o = {x: source.x, y: source.y};
@@ -680,3 +749,22 @@ function toggleLegend() {
   fullfillUpdate(rootNode);
   ignoreDiff = false;
 } // end toggleAxis
+
+function inspect() {
+  // TODO: when switching states, redraw graph to remove past
+  //       highlighting. Also, maintain collapse depth.
+  if(inspection) {
+    d3.select("#btn_scene_inspect")[0][0].value = "Inspect";
+    inspection = false;
+  } else {
+    // TODO: disable end-user interaction (i.e. the brush example
+    //       still lets you brush the points in the vis when in
+    //       the inspect format, but we want to prevent this from
+    //       happening so that the user can inspect things like
+    //       the brush itself.)
+    // TODO: remove transition when interacting in the inspect mode
+    // TODO: maintain the collapse depth in the inspect mode.
+    d3.select("#btn_scene_inspect")[0][0].value = "Interact";
+    inspection = true;
+  }
+} // end inspect

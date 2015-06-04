@@ -17,5 +17,6 @@ module.exports = {
   },
   transforms: require('./src/transforms/index'),
   config: require('./src/util/config'),
-  util: require('datalib')
+  util: require('datalib'),
+  Bounds: require("./src/util/Bounds")
 };

@@ -70,7 +70,7 @@ ved.parse = function() {
 
 ved.drawScenegraph = function() {
   d3.select("#scenegraph").selectAll("*").remove();
-  extractScenegraph(ved.root);
+  sceneInit(ved);
 }
 
 ved.resize = function(event) {
