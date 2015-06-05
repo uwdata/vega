@@ -355,12 +355,11 @@ function getColorValue(d) {
   // If the input node is collapsed, aggregate the amount of
   // change for all internal nodes. Otherwise, the fill color
   // should be white.
-  // TODO: Maybe this should round UP instead of down so if only 
-  //       1% changes it is still visible.
   if(d.collapsed != undefined && d.collapsed) {
     if(aggregateChange[d.name] == undefined) return 0;
-    var percentage = Math.floor((aggregateChange[d.name] / numDescendants[d.name])*10)*10;
-    if(percentage == 100) return 90; // Everything over 90 should have the darkest color.
+    if(numDescendants[d.name] == undefined) return 90; // All descendants were removed.
+    var percentage = Math.ceil((aggregateChange[d.name] / numDescendants[d.name])*10)*10;
+    if(percentage >= 100) return 90; // Everything over 90 should have the darkest color.
     return percentage;
   } else {
     return 0;
@@ -400,7 +399,6 @@ function processDiff() {
       if(matchingNodes[0].collapsed != undefined) {
         node.collapsed = matchingNodes[0].collapsed;
       }
-      //console.log(matchingNodes[0].data, node.data)
       node.status = "updated";
     } else {
       if(matchingNodes[0].collapsed != undefined) {
@@ -421,10 +419,6 @@ function processDiff() {
     if(newNode.length == 0 && (!oldNode.status || oldNode.status != "removed")) {
       oldNode.status = "removed";
       newData.push(oldNode);
-      // TODO: the heatmap doesn't seem to be picking up nodes
-      //       when they are removed. Something weird is going on
-      //       with this part of the computation? (see index chart
-      //       node removal for example.)
       map[oldNode.parent] = (map[oldNode.parent] + 1) || 1;
     }
   });
