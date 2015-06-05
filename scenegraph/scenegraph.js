@@ -1,45 +1,7 @@
-/*
- * Both forms of scenegraph updates have their own sets of problems as 
- * to how they should be implemented. I outline these challenges as
- * follows:
- * 
- *********************************************************************
- * Update Specification:
- * 
- *    Every time the user selects "parse" the specification is parsed
- *    from scratch. This means that all of the internal IDs are lost
- *    and replaced with new ones. Therefore, it is not immediately
- *    easy to connect nodes from one iteration of the specification to
- *    nodes in the other. The IDs currently used to construct the
- *    scenegraph are based on some of the internal data, but this
- *    format will not work well since the main thing of interest is to
- *    see how the internal data changes. Relying on structure also will
- *    not work since it will be impossible to distinguish things such
- *    as small multiple visualizations.
- * 
- *********************************************************************
- * Update User Interaction:
- * 
- *    The changes based on interaction happen somewhere internally
- *    that I have not identified as of yet. However, these sorts of
- *    changes do NOT recreate the entire scenegraph, they just update
- *    the relevant components. This will make actually updating the
- *    scenegraph visualization easier (and is likely more interesting)
- *    but requires hooking the visualization of the scenegraph into
- *    the internals which would probably not be ideal.
- *
- *********************************************************************
- * Other tasks that could be completed include:
- *    1. Figure out how to simplify the scenegraph visualization
- *       (e.g. don't automatically expand all the nodes, only expand
- *        a subset and then provide more fine grained controls for
- *        showing and hiding all nodes).
- *    2. Figure out some of the logic about how to connect scenegraph
- *       elements to the specification.
- *
- */
+// The data
+var oldData, newData, treeData, root, rootNode, tree;
 
-var oldData, newData, treeData, root, rootNode, tree, svg, diagonal;
+var svg, diagonal;
 var aggregateChange, numDescendants;
 var margin, width, height;
 
@@ -47,8 +9,9 @@ var ved, padding;
 
 var color = d3.scale.ordinal()
     .range(["white", "#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", 
-            "#fd8d3c", "#f16913", "#d94801", "#a63603", "#7f2704"])
-    .domain([0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+            "#fd8d3c", "#f16913", "#d94801", "#a63603", "#7f2704", 
+            "black"])
+    .domain([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
 
 /*************************************************************/
 /*************************** Flags ***************************/
@@ -57,7 +20,7 @@ var init = false;
 var showAxis = true;
 var showLegend = true;
 var ignoreDiff = false;
-var inspection = false;
+var inspection = false; // INSPECT MODE
 
 /*************************************************************/
 /************************* Constants *************************/
@@ -89,7 +52,9 @@ var duration = 750;
 //       modifies and parses the specification.)
 
 // BASED ON: https://remysharp.com/2010/07/21/throttling-function-calls
-// Reset delay each time debounce is called to prevent update.
+// Reset delay each time debounce is called to prevent the scenegraph
+// from updating. Once the delay is completed without interruption,
+// fullfill the update!
 var timer = null;
 function debounce(fn, node, delay) {
   return function () {
@@ -105,22 +70,22 @@ function fullfillUpdate(node) {
   extractScenegraph(node);
 } // end fullfillUpdate
 
-// Wait until DELAY has passed without end-user interaction 
-// before updating the scenegraph.
 function updateScenegraph() {
   // TODO: remove hard coding.
   if(!inspection) {
-    d3.select("#scenegraph").selectAll("rect").remove();
-    var rectWidth = d3.select("#scenegraph")[0][0].offsetWidth;
-    var rectHeight = d3.select("#scenegraph")[0][0].offsetHeight;
+    // Draw a rectangle to gray out the scenegraph to denote
+    // that it is no longer up-to-date.
+    d3.select("#invalidRect").remove();
     svg.append("rect")
+        .attr("id", "invalidRect")
         .attr("x", -50)
         .attr("y", -100)
-        .attr("width", rectWidth + 50)  
-        .attr("height", rectHeight + 100)
+        .attr("width", d3.select("#theScenegraph")[0][0].offsetWidth * 1.5)  
+        .attr("height", d3.select("#theScenegraph")[0][0].offsetHeight)
         .style("fill", "#FBFBFB")
         .style("fill-opacity", 0.75);
 
+    // Debounce the fullfillUpdate.
     debounce(fullfillUpdate, this, DELAY)();
   }
 } // end updateScenegraph
@@ -357,11 +322,12 @@ function getColorValue(d) {
   // If the input node is collapsed, aggregate the amount of
   // change for all internal nodes. Otherwise, the fill color
   // should be white.
+  var maxColor = color.domain()[color.domain().length - 1];
   if(d.collapsed != undefined && d.collapsed) {
     if(aggregateChange[d.name] == undefined) return 0;
-    if(numDescendants[d.name] == undefined) return 90; // All descendants were removed.
+    if(numDescendants[d.name] == undefined) return maxColor; // All descendants were removed.
     var percentage = Math.ceil((aggregateChange[d.name] / numDescendants[d.name])*10)*10;
-    if(percentage >= 100) return 90; // Everything over 90 should have the darkest color.
+    if(percentage >= 100) return maxColor;
     return percentage;
   } else {
     return 0;
@@ -481,6 +447,7 @@ function drawGraph(nodes) {
       .projection(function(d) { return [d.x, d.y]; });
 
   svg = d3.select("#scenegraph").append("svg")
+      .attr("id", "theScenegraph")
       .attr("width", width + margin.right + margin.left)
       .attr("height", height + margin.top + margin.bottom)
     .append("g")
@@ -630,35 +597,37 @@ function drawLegend() {
   var legendRectSize = 10;
   var legendSpacing = 2;
 
-  var legend = svg.selectAll('.legend')
+  var caption = d3.select("#scenegraph").select("svg").append("g")
+      .attr("transform", "translate(5,30)");
+
+  var legend = caption.selectAll(".legend")
       .data(color.domain())
     .enter()
-      .append('g')
-      .attr('class', 'legend')
-      .attr('transform', function(d, i) {
+      .append("g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) {
         var height = legendRectSize + legendSpacing;
         var vert = -1.5 * legendRectSize;
         var horz = i * height;
         return 'translate(' + horz + ',' + vert + ')';
       });
 
-  legend.append('rect')
-      .attr('width', legendRectSize)
-      .attr('height', legendRectSize)
-      .style('fill', color)
-      .style('stroke', color);
+  legend.append("rect")
+      .attr("width", legendRectSize)
+      .attr("height", legendRectSize)
+      .style("fill", color)
+      .style("stroke", color);
 
-  legend.append('text')
-      .attr('x', legendRectSize / 2 - 2 * legendSpacing)
-      .attr('y', 2 * legendRectSize)
+  legend.append("text")
+      //.attr('x', legendRectSize / 2 - 2 * legendSpacing)
+      .attr("y", 2 * legendRectSize)
       .text(function(d) { 
-        if(d == 90) return "90+";
         return d;
       })
+      .style("text-anchor", "center")
       .style("font-size", "6pt")
-      .style("fill", "lightgraph")
-      .style("opacity", 0.5);
-}
+      .style("fill", "lightgray");
+} // end drawLegend
 
 /*************************************************************/
 /********************** Show/Hide Nodes **********************/
