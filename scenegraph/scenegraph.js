@@ -159,6 +159,7 @@ function sceneInit(context) {
   });
 
   extractScenegraph(ved.root);
+  drawLegend();
 } // end sceneInit
 
 /*************************************************************/
@@ -324,6 +325,7 @@ function computeDescendants(data) {
   numDescendants = {};
 
   // Create a map of the number of children for each node.
+  // Note: This does NOT include nodes that have a "removed" status.
   data.forEach(function(node) {
     numChildren[node.parent] = (numChildren[node.parent] + 1) || 1;
   });
@@ -508,8 +510,8 @@ function update(source) {
       .attr("class", "node")
       .attr("transform", function(d) { return "translate(" + source.x0 + "," + source.y0 + ")"; })
       .on("dblclick", function(d) {
-        //if(d.data) console.log(d.name + ":", d.data)
-        if (d.bounds) console.log(d.name + ":", d.bounds)
+        if(d.data) console.log(d.name + " data:", d.data)
+        if (d.bounds) console.log(d.name + " bounds:", d.bounds)
         else console.log(d.name)
       })
       .on("click", toggle);
@@ -622,6 +624,41 @@ function update(source) {
     d.y0 = d.y;
   });
 } // end update
+
+function drawLegend() {
+
+  var legendRectSize = 10;
+  var legendSpacing = 2;
+
+  var legend = svg.selectAll('.legend')
+      .data(color.domain())
+    .enter()
+      .append('g')
+      .attr('class', 'legend')
+      .attr('transform', function(d, i) {
+        var height = legendRectSize + legendSpacing;
+        var vert = -1.5 * legendRectSize;
+        var horz = i * height;
+        return 'translate(' + horz + ',' + vert + ')';
+      });
+
+  legend.append('rect')
+      .attr('width', legendRectSize)
+      .attr('height', legendRectSize)
+      .style('fill', color)
+      .style('stroke', color);
+
+  legend.append('text')
+      .attr('x', legendRectSize / 2 - 2 * legendSpacing)
+      .attr('y', 2 * legendRectSize)
+      .text(function(d) { 
+        if(d == 90) return "90+";
+        return d;
+      })
+      .style("font-size", "6pt")
+      .style("fill", "lightgraph")
+      .style("opacity", 0.5);
+}
 
 /*************************************************************/
 /********************** Show/Hide Nodes **********************/
