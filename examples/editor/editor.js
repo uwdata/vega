@@ -70,7 +70,8 @@ ved.parse = function() {
 
 ved.drawScenegraph = function() {
   d3.select("#scenegraph").selectAll("*").remove();
-  sceneInit(ved);
+  initialize(ved);
+  // TODO: only call initialze when the dropdown is selected
 }
 
 ved.resize = function(event) {
