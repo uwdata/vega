@@ -12,6 +12,7 @@ var numDescendants, aggregateChange;
 var svg;
 var width, height;
 var tree;
+var padding;
 
 /*************************************************************/
 /*************************** Flags ***************************/
@@ -200,8 +201,9 @@ function getDataObj(node) {
 function extractScenegraph(node) {
   // Save information about root node and prepare for tree traversal
   var nodes = [];
-  nodes.push({"name": getID(node), "type": node.marktype, "parent": "null"});
+  nodes.push({"name": getID(node), "type": node.marktype, "parent": "null", "bounds": node.bounds});
   var nodesToCheck = node.items.slice(0);
+  padding = node.bounds; // Save bounds for future computation.
 
   // Traverse scenegraph until all nodes have been reached
   while(nodesToCheck.length != 0) {
@@ -359,8 +361,10 @@ function dataChanged(oldDataObj, newDataObj) {
   Object.keys(newDataObj).forEach(function(key) {
     if(newDataObj[key] instanceof Object &&
        dataChanged(newDataObj[key], oldDataObj[key])) {
+      console.log(newDataObj[key], "!=", oldDataObj[key])
       somethingChanged = true;
     } else if(newDataObj[key] != oldDataObj[key]) {
+      console.log(newDataObj[key], "!=", oldDataObj[key])
       somethingChanged = true;
     }
   });
@@ -424,10 +428,10 @@ function drawNodes(node) {
         return "translate(" + root.x0 + "," + root.y0 + ")";
         //return "translate(" + source.x0 + "," + source.y0 + ")"; 
       })
-      .on("dblclick", function(d) {
+      .on("contextmenu", function(d) {
         // TODO: this isn't working anymore?
         if(d.data) console.log(d.name + " data:", d.data)
-        if (d.bounds) console.log(d.name + " bounds:", d.bounds)
+        //if (d.bounds) console.log(d.name + " bounds:", d.bounds)
         else console.log(d.name)
       })
       .on("click", toggle);
@@ -605,11 +609,6 @@ function getColorValue(d) {
 /********************** Show/Hide Nodes **********************/
 /*************************************************************/
 function toggle(d) {
-  // Print relevant node information
-  if(d.data) console.log(d.name + " data:", d.data)
-  if (d.bounds) console.log(d.name + " bounds:", d.bounds)
-  else console.log(d.name)
-
   // Toggle collapsed status of node.
   if (d.children) collapse(d);
   else expand(d);
@@ -706,17 +705,26 @@ function updateScenegraph() {
   }
 } // end updateScenegraph
 
+function getOffset(currentNode, point) {
+  newData.forEach(function(node) {
+    if(node.name == currentNode.parent && 
+       !dataChanged(node.bounds, currentNode.bounds)) {
+      //console.log("updating offset")
+      point.x += node.bounds.x1;
+      point.y += node.bounds.y1;
+      return getOffset(node, point);
+    }
+  });
+  return point;
+}
+
 function enableInspection() {
-  console.log(context)
-  var padding = context.view.model()._defs.padding;
   // TODO: when padding is auto, not sure how to resolve the
   //       position of the point.
   context.view._handler.on("click", function(evt) { 
     if(inspection) {
-      console.log("Inspecting element at point(", evt.layerX, ",", evt.layerY, ")")
-      var x = evt.layerX - padding.left;
-      var y = evt.layerY - padding.top;
-      var point = new vg.Bounds().set(x, y, x, y)
+      //console.log("Inspecting element at point(", evt.layerX, ",", evt.layerY, ")")
+      var obj = {x: evt.layerX + padding.x1, y: evt.layerY + padding.y1};
       newData.forEach(function(node) {
         node.userSelect = null;
         // TODO: This bound calculation is not quite working. The
@@ -732,7 +740,12 @@ function enableInspection() {
         // TODO: Is the bound of a child ALWAYS based on the bounds
         //       of the parent? If so, incorporate that assumption
         //       into this bounds calculation.
-        if(node.bounds && node.bounds.encloses(point)) {
+        //obj = getOffset(node, obj);
+        var point = new vg.Bounds().set(obj.x, obj.y, obj.x, obj.y);
+        //console.log("Modified point: (", obj.x, ",", obj.y, ")")
+        if(node.bounds.encloses(point)) {
+          //console.log(p, " is in ", node.bounds, "?");
+          //console.log("it matches!")
           node.userSelect = true;
         }
       });
@@ -795,8 +808,6 @@ function inspect() {
     // TODO: remove transition when interacting in the inspect mode
     d3.select("#btn_scene_inspect")[0][0].value = "Interact";
     inspection = true;
-
-    console.log("Handlers:", context.view._handler._handlers)
     handlers = context.view._handler._handlers;
     context.view._handler._handlers = {};
     enableInspection(); 
