@@ -281,7 +281,7 @@ describe('Expression', function() {
       var data = {a : 2, föö : 5},
           evt  = {type: "mousemove"},
           fn = expr(str).fn;
-      return expr.eval(graph, fn, data, evt);
+      return expr.eval(graph, fn, {datum: data, event: evt});
     }
 
     evaluate.fn = function(str) {
@@ -327,18 +327,18 @@ describe('Expression', function() {
 
     // Evaluation with arguments
     it('should handle data argument', function() {
-      expect(evaluate('d.a')).to.equal(2);
-      expect(evaluate('d["a"]')).to.equal(2);
+      expect(evaluate('datum.a')).to.equal(2);
+      expect(evaluate('datum["a"]')).to.equal(2);
     });
 
     it('should handle event argument', function() {
-      expect(evaluate('e.type')).to.equal("mousemove");
+      expect(evaluate('event.type')).to.equal("mousemove");
     });
 
     it('should handle item argument');
 
     it('should handle unicode', function() {
-      expect(evaluate('d.föö')).to.equal(5);
+      expect(evaluate('datum.föö')).to.equal(5);
     });
 
 
@@ -380,6 +380,8 @@ describe('Expression', function() {
       expect(evaluate('substring("123",0,1)')).to.equal("123".substring(0,1));
       expect(evaluate('parseFloat("3.14")')).to.equal(parseFloat("3.14"));
       expect(evaluate('parseInt("42")')).to.equal(parseInt("42"));
+      expect(evaluate('indexof("hello world", "l")')).to.equal(2);
+      expect(evaluate('lastindexof("hello world", "l")')).to.equal(9);
     });
 
     it('should eval regular expression functions', function() {
@@ -395,6 +397,7 @@ describe('Expression', function() {
       expect(evaluate('time(datetime(2001,1,1))')).to.equal(+d);
       expect(evaluate('timezoneoffset(datetime(2001,1,1))')).to.equal(d.getTimezoneOffset());
       
+      expect(evaluate('day(datetime(2001,1,1))')).to.equal(d.getDay());
       expect(evaluate('year(datetime(2001,1,1))')).to.equal(d.getFullYear());
       expect(evaluate('month(datetime(2001,1,1))')).to.equal(d.getMonth());
       expect(evaluate('hours(datetime(2001,1,1))')).to.equal(d.getHours());
@@ -402,6 +405,7 @@ describe('Expression', function() {
       expect(evaluate('seconds(datetime(2001,1,1))')).to.equal(d.getSeconds());  
       expect(evaluate('milliseconds(datetime(2001,1,1))')).to.equal(d.getMilliseconds());
       
+      expect(evaluate('utcday(datetime(2001,1,1))')).to.equal(d.getUTCDay());
       expect(evaluate('utcyear(datetime(2001,1,1))')).to.equal(d.getUTCFullYear());
       expect(evaluate('utcmonth(datetime(2001,1,1))')).to.equal(d.getUTCMonth());
       expect(evaluate('utchours(datetime(2001,1,1))')).to.equal(d.getUTCHours());
@@ -414,6 +418,14 @@ describe('Expression', function() {
         expect(evaluate('date(datetime(2001,1,'+date+'))')).to.equal(d.getDate());
         expect(evaluate('utcdate(datetime(2001,1,'+date+'))')).to.equal(d.getUTCDate());
       }
+    });
+
+    it('should evaluate if statements', function() {
+      expect(evaluate("if(datum.a > 1, 1, 2)")).to.equal(1);
+      expect(evaluate("if(event.type == 'mousedown', 1, 2)")).to.equal(2);
+      expect(evaluate("if(datum.a > 1, if(event.type == 'mousedown', 3, 4), 2)")).to.equal(4);
+      expect(evaluate.fn("if(datum.a > 1, 1)")).to.throw();
+      expect(evaluate.fn("if(datum.a > 1, 1, 2, 3)")).to.throw();
     });
 
     it('should not eval undefined functions', function() {
@@ -438,13 +450,13 @@ describe('Expression', function() {
       expect(evaluate('Object')).to.be.undefined;
       expect(evaluate('XMLHttpRequest')).to.be.undefined;
       expect(evaluate('a')).to.be.undefined;
-      expect(evaluate('d[Math]')).to.be.undefined;
+      expect(evaluate('datum[Math]')).to.be.undefined;
     });
 
     it('should allow nested identifiers outside whitelist', function() {
-      expect(evaluate.fn('d.eval')).to.not.throw();
-      expect(evaluate.fn('d.Math')).to.not.throw();
-      expect(evaluate.fn('d.a.eval')).to.not.throw();
+      expect(evaluate.fn('datum.eval')).to.not.throw();
+      expect(evaluate.fn('datum.Math')).to.not.throw();
+      expect(evaluate.fn('datum.a.eval')).to.not.throw();
       expect(evaluate.fn('{eval:0, Math:1}')).to.not.throw();
     });
 
@@ -458,8 +470,8 @@ describe('Expression', function() {
       expect(evaluate.fn('Function("1+2")')).to.throw();
     });
 
-    it('should not allow log.debugger invocation', function() {
-      expect(evaluate.fn('log.debugger')).to.throw();
+    it('should not allow debugger invocation', function() {
+      expect(evaluate.fn('debugger')).to.throw();
     });
 
     it('should not allow this reference', function() {

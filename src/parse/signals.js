@@ -1,10 +1,13 @@
-var expr = require('./expr'),
+var dl = require('datalib'),
+    expr = require('./expr'),
+    functions = require('../expression/functions')(),
     C = require('../util/constants');
 
 function parseSignals(model, spec) {
   // process each signal definition
   (spec || []).forEach(function(s) {
-    var signal = model.signal(s.name, s.init);
+    var signal = model.signal(s.name, s.init)
+      .verbose(s.verbose);
 
     if(s.init && s.init.expr) {
       s.init.expr = expr(s.init.expr);
@@ -14,8 +17,8 @@ function parseSignals(model, spec) {
     if(s.expr) {
       s.expr = expr(s.expr);
       signal.evaluate = function(input) {
-        var val = exprVal(model, s);
-        if(val !== signal.value()) {
+        var val = exprVal(model, s, signal.value());
+        if(val !== signal.value() || signal.verbose()) {
           signal.value(val);
           input.signals[s.name] = 1;
           return input;
@@ -30,10 +33,10 @@ function parseSignals(model, spec) {
   return spec;
 };
 
-function exprVal(model, spec) {
+function exprVal(model, spec, currentValue) {
   var e = spec.expr,
-      val = expr.eval(model, e.fn, null, null, null, null, e.signals);
-  return spec.scale ? scale(model, spec, val) : val;
+      val = expr.eval(model, e.fn, {signals: e.signals});
+  return spec.scale ? parseSignals.scale(model, spec, val) : val;
 }
 
 parseSignals.scale = function scale(model, spec, value) {
@@ -51,3 +54,53 @@ parseSignals.scale = function scale(model, spec, value) {
 }
 
 module.exports = parseSignals;
+parseSignals.schema = {
+  "refs": {
+    "signal": {
+      "title": "SignalRef",
+      "type": "object",
+      "properties": {"signal": {"type": "string"}},
+      "required": ["signal"]
+    },
+
+    "scopedScale": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "oneOf": [{"$ref": "#/refs/signal"}, {"type": "string"}]
+            },
+            "scope": {"$ref": "#/refs/signal"},
+            "invert": {"type": "boolean", "default": false}
+          },
+
+          "additionalProperties": false,
+          "required": ["name"]
+        }
+      ]
+    }
+  },
+
+  "defs": {
+    "signal": {
+      "type": "object",
+
+      "properties": {
+        "name": {
+          "type": "string",
+          "not": {"enum": ["datum", "event"].concat(dl.keys(functions))}
+        },
+        "init": {},
+        "verbose": {"type": "boolean", "default": false},
+        "expr": {"type": "string"},
+        "scale": {"$ref": "#/refs/scopedScale"},
+        "streams": {"$ref": "#/defs/streams"}
+      },
+
+      "additionalProperties": false,
+      "required": ["name"]
+    }
+  }
+};

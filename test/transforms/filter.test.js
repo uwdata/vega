@@ -17,7 +17,7 @@ describe('Filter', function() {
       "data": [{ 
         "name": "table", 
         "values": values,
-        "transform": [{"type": "filter", "test": "d.y > 45"}]
+        "transform": [{"type": "filter", "test": "datum.y > 45"}]
       }] 
     }, function(model) {
       var ds = model.data('table'),
@@ -39,7 +39,7 @@ describe('Filter', function() {
       "data": [{ 
         "name": "table", 
         "values": values,
-        "transform": [{"type": "filter", "test": "d.y > above"}]
+        "transform": [{"type": "filter", "test": "datum.y > above"}]
       }] 
     }, function(model) {
       var ds = model.data('table'),
@@ -65,4 +65,17 @@ describe('Filter', function() {
       done();
     }, viewFactory);
   });
+
+  it('should validate against the schema', function() {
+    var schema = schemaPath(transforms.filter.schema),
+        validate = validator(schema);
+
+    expect(validate({ "type": "filter", "test": "d.x > 5" })).to.be.true;
+    
+    expect(validate({ "type": "foo" })).to.be.false;
+    expect(validate({ "type": "filter" })).to.be.false;
+    expect(validate({ "type": "filter", "test": true })).to.be.false;
+    expect(validate({ "type": "filter", "test": "d.x > 5", "foo": "bar" })).to.be.false;
+  });
+
 });

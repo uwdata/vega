@@ -16,7 +16,7 @@ var proto = (Filter.prototype = new Transform());
 
 function test(x) {
   return expr.eval(this._graph, this.param("test"), 
-    x, null, null, null, this.dependency(C.SIGNALS));
+    {datum: x, signals: this.dependency(C.SIGNALS)});
 };
 
 proto.transform = function(input) {
@@ -55,3 +55,18 @@ proto.transform = function(input) {
 };
 
 module.exports = Filter;
+Filter.schema  = {
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Filter transform",
+  "description": "Filters elements from a data set to remove unwanted items.",
+  "type": "object",
+  "properties": {
+    "type": {"enum": ["filter"]},
+    "test": {
+      "type": "string",
+      "description": "A string containing an expression (in JavaScript syntax) for the filter predicate."
+    }
+  },
+  "additionalProperties": false,
+  "required": ["type", "test"]
+};

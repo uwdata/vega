@@ -14,16 +14,21 @@ filtered
   / s:stream { return s }
 
 stream
-  = t:(class / id)? e:eventType { return { event: e, target: t } }
-  / s:[:a-zA-z0-9_-]+ { return { signal: s.join("") }}
-  / "(" m:merged ")" { return { stream: m }}
+  = "(" m:merged ")" { return { stream: m }}
+  / "@" n:name ":" e:eventType { return {event: e, name: n} }
+  / m:markType ":" e:eventType { return {event: e, mark: m} }
+  / t:css ":" e:eventType { return {event: e, target: t} }
+  / e:eventType { return {event: e} }
+  / s:name { return { signal: s }}
+  
 
-class = "." c:value ":" { return { type:'class', value: c } }
-id = "#" id: value ":" { return { type:'id', value: id } }
+markType = m: "rect" / "symbol" / "path" / "arc" / "area" / "line" / "rule" / "image" / "text" / "group"
 
 eventType = e: "mousedown" / "mouseup" / "click" / "dblclick" / "wheel" / "keydown" / "keypress" / "keyup" / "mousewheel" / "mousemove" / "mouseout" / "mouseover" / "mouseenter" / "touchstart" / "touchmove" / "touchend"
 
-filter = "[" field:value "]" { return field  }
-value = v:['"a-zA-Z0-9_\.\>\<\=\! \t-]+ { return v.join("") }
+filter = "[" e:expr "]" { return e  }
 
+name = n:[a-zA-Z0-9_-]+ { return n.join("") }
+css  = c:[a-zA-Z0-9-_  #\.\>\+~\[\]=|\^\$\*]+ { return c.join("") }
+expr = v:['"a-zA-Z0-9_\.\>\<\=\! \t-&|~]+ { return v.join("") }
 sep = [ \t\r\n]*

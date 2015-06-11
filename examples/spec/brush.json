@@ -6,13 +6,16 @@
     {
       "name": "brush_start",
       "init": {"x": 0, "y": 0},
-      "streams": [{"type": "mousedown", "expr": "p"}]
+      "streams": [{"type": "mousedown", "expr": "{x: event.vgX, y: event.vgY}"}]
     },
     {
       "name": "brush_end",
       "init": {"x": 0, "y": 0},
       "streams": [
-        {"type": "mousedown, mouseup, [mousedown, mouseup] > mousemove", "expr": "p"}
+        {
+          "type": "mousedown, mouseup, [mousedown, mouseup] > mousemove", 
+          "expr": "{x: event.vgX, y: event.vgY}"
+        }
       ]
     }
   ],
@@ -52,14 +55,18 @@
   "scales": [
     {
       "name": "x",
-      "range": "width", "zero": false,
-      "domain": {"data": "iris", "field": "sepalWidth"}
+      "type": "linear",
+      "domain": {"data": "iris", "field": "sepalWidth"},
+      "range": "width", 
+      "zero": false
     },
     {
       "name": "y",
+      "type": "linear",
+      "domain": {"data": "iris", "field": "petalLength"},
       "range": "height",
-      "nice": true, "zero": false,
-      "domain": {"data": "iris", "field": "petalLength"}
+      "nice": true, 
+      "zero": false
     },
     {
       "name": "c",

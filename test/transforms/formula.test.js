@@ -17,7 +17,7 @@ describe('Formula', function() {
       "data": [{ 
         "name": "table", 
         "values": values,
-        "transform": [{"type": "formula", "field": "z", "expr": "d.x + d.y"}]
+        "transform": [{"type": "formula", "field": "z", "expr": "datum.x + datum.y"}]
       }] 
     }, function(model) {
       var ds = model.data('table'),
@@ -42,7 +42,7 @@ describe('Formula', function() {
       "data": [{ 
         "name": "table", 
         "values": values,
-        "transform": [{"type": "formula", "field": "z", "expr": "multipler * (d.x + d.y)"}]
+        "transform": [{"type": "formula", "field": "z", "expr": "multipler * (datum.x + datum.y)"}]
       }] 
     }, function(model) {
       var ds = model.data('table'),
@@ -76,5 +76,19 @@ describe('Formula', function() {
 
       done();
     }, modelFactory);
+  });
+
+  it('should validate against the schema', function() {
+    var schema = schemaPath(transforms.formula.schema),
+        validate = validator(schema);
+
+    expect(validate({ "type": "formula", "expr": "d.x + d.y", "field": "sum" })).to.be.true;
+    
+    expect(validate({ "type": "foo" })).to.be.false;
+    expect(validate({ "type": "formula" })).to.be.false;
+    expect(validate({ "type": "formula", "field": "sum" })).to.be.false;
+    expect(validate({ "type": "formula", "expr": "d.x + d.y" })).to.be.false;
+    expect(validate({ "type": "formula", "field": "sum", "expr": 55 })).to.be.false;
+    expect(validate({ "type": "formula", "field": 55, "expr": "d.x + d.y" })).to.be.false;
   });
 });

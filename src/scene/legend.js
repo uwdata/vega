@@ -160,7 +160,9 @@ function lgnd(model) {
   function quantDef(scale) {
     var def = q_legend_def(scale),
         dom = scale.domain(),
-        data = dom.map(ingest),
+        data = (values == null
+          ? (scale.ticks ? scale.ticks.apply(scale, tickArguments) : scale.domain())
+          : values).map(ingest),
         width = (gradientStyle.width && gradientStyle.width.value) || config.legend.gradientWidth,
         fmt = format==null ? (scale.tickFormat ? scale.tickFormat.apply(scale, tickArguments) : String) : format;
 
@@ -190,7 +192,7 @@ function lgnd(model) {
   
   function q_legend_def(scale) {
     // setup legend marks
-    var titles = dl.extend(m.title, vg_legendTitle()),
+    var titles = dl.extend(m.titles, vg_legendTitle()),
         gradient = dl.extend(m.gradient, vg_legendGradient()),
         labels = dl.extend(m.labels, vg_hLegendLabels()),
         grad = new Gradient();
@@ -399,7 +401,7 @@ function vg_legendPosition(item, group, trans, db, signals, predicates) {
   
   if (trans) trans.interpolate(item, o);
   var enc = item.mark.def.properties.enter.encode;
-  enc.call(enc, item, group, trans);
+  enc.call(enc, item, group, trans, db, signals, predicates);
 }
 
 function vg_legendSymbolExtend(mark, size, shape, fill, stroke) {

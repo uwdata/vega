@@ -6,7 +6,11 @@
   "signals": [
     {
       "name": "xPos",
-      "streams": [{"type": "mousemove", "expr": "p.x", "scale": {"name": "x", "invert": "true"}}]
+      "streams": [{
+        "type": "mousemove", 
+        "expr": "event.vgX", 
+        "scale": {"name": "x", "invert": true}
+      }]
     },
 
     {"name": "minDate", "init": {"expr": "time('Jan 1 2000')"}},
@@ -32,7 +36,7 @@
       "source": "stocks",
       "transform": [{
         "type": "filter",
-        "test": "month(d.date) == month(indexDate) && year(d.date) == year(indexDate)"
+        "test": "month(datum.date) == month(indexDate) && year(datum.date) == year(indexDate)"
       }]
     },
     {
@@ -48,7 +52,7 @@
       }, {
         "type": "formula",
         "field": "indexed_price",
-        "expr": "d.index_term.price > 0 ? (d.price - d.index_term.price)/d.index_term.price : 0"
+        "expr": "datum.index_term.price > 0 ? (datum.price - datum.index_term.price)/datum.index_term.price : 0"
       }]
     }
   ],
@@ -57,15 +61,15 @@
     {
       "name": "x",
       "type": "time",
-      "range": "width",
-      "domain": {"data": "stocks", "field": "date"}
+      "domain": {"data": "stocks", "field": "date"},
+      "range": "width"
     },
     {
       "name": "y",
       "type": "linear",
+      "domain": {"data": "indexified_stocks", "field": "indexed_price"},
       "range": "height",
-      "nice": true,
-      "domain": {"data": "indexified_stocks", "field": "indexed_price"}
+      "nice": true
     },
     {
       "name": "color", 
@@ -99,7 +103,7 @@
         {
           "type": "text",
           "from": {
-            "transform": [{"type": "filter", "test": "d.date == maxDate"}]
+            "transform": [{"type": "filter", "test": "datum.date == maxDate"}]
           },
           "properties": {
             "update": {
@@ -143,7 +147,7 @@
           "x": {"scale": "x", "signal": "indexDate"},
           "y2": {"field": {"group": "height"}, "offset": 15},
           "align": {"value": "center"},
-          "text": {"signal": "indexDate"},
+          "text": {"template": "{{indexDate | time: '%b %Y'}}"},
           "fill": {"value": "red"}
         }
       }

@@ -8,6 +8,8 @@ var STATIC_SPECS = [
   "error",
   "force",
   "grouped_bar",
+  "heatmap",
+  "image",
   "lifelines",
   "map",
   "parallel_coords",
