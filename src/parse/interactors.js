@@ -112,6 +112,7 @@ function parseInteractors(model, spec, defFactory) {
       nsProperties(m.properties.enter);
       nsProperties(m.properties.update);
       nsProperties(m.properties.exit);
+      nsMarks(name, m.marks);
       mk[ns(m.name, name)] = m; 
     });
   }
