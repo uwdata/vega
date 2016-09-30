@@ -66,6 +66,7 @@ parseSpec.schema = {
 
       "allOf": [{"$ref": "#/defs/container"}, {
         "properties": {
+          "name": {"type": "string"},
           "width": {"type": "number"},
           "height": {"type": "number"},
           "viewport": {
